@@ -1,0 +1,105 @@
+.input-group {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    overflow: hidden;
+    width: 100%;
+    /* max-width: 100%;  */
+    margin-bottom: 1.5%;
+}
+.input-group span {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    border-right: 1px solid #ced4da;
+    white-space: nowrap;
+    font-size: 16px;
+    color: #1b1c1d;
+}
+.input-group input,textarea {
+    flex: 1;
+    border: none;
+    padding: 10px;
+    font-size: 14px;
+    color: #495057;
+}
+.input-group input, textarea:focus {
+    outline: none;
+}
+
+form{
+    margin-bottom: 1.5%;
+}
+
+.first-form{
+    width: 100%;
+}
+
+
+.boton-elegante {
+    padding: 7px 15px;
+    border: 2px solid #2c2c2c;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.4s ease;
+    outline: none;
+    position: relative;
+    overflow: hidden;
+    font-weight: bold;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    -ms-border-radius: 5px;
+    -o-border-radius: 5px;
+}
+  
+  .boton-elegante::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(      circle,      rgba(255, 255, 255, 0.25) 0%,      rgba(255, 255, 255, 0) 70%    );
+    transform: scale(0);
+    transition: transform 1.5s ease;
+    -webkit-transition: transform 1.5s ease;
+    -moz-transition: transform 1.5s ease;
+    -ms-transition: transform 1.5s ease;
+    -o-transition: transform 1.5s ease;
+}
+  
+  .boton-elegante:hover::after {
+    transform: scale(4);
+  }
+  
+  .boton-elegante:hover {
+    color: black;
+    border-color: #272626;
+    background: rgba(255, 255, 255, 0.74);
+  }
+  
+  .form-container {
+    display: flex;
+    gap: 3%;
+    align-items: center;
+}
+
+.second-form {
+    position: relative;
+}
+
+.second-form::before {
+    content: "";
+    position: absolute;
+    left: -2.8%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    height: 185px;
+    background-color: rgb(190, 188, 188);
+}
+

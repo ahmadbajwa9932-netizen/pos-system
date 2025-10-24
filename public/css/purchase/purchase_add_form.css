@@ -1,0 +1,142 @@
+.product-form-wrapper {
+    padding: 0px 20px 20px 20px;
+    box-sizing: border-box;
+}
+
+/* Make input groups full-width and responsive */
+.product-form-wrapper .input-group,
+.product-form-wrapper .input-group-select {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin-bottom: 1.5%;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+/* Span styling stays the same */
+.product-form-wrapper .input-group span,
+.product-form-wrapper .input-group-select span {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    border-right: 1px solid #ced4da;
+    white-space: nowrap;
+    font-size: 16px;
+    color: #1b1c1d;
+}
+
+/* Inputs and selects now grow properly */
+.product-form-wrapper .input-group input,
+.product-form-wrapper .input-group-select select {
+    flex: 1;
+    border: none;
+    padding: 10px;
+    font-size: 14px;
+    color: #495057;
+    min-width: 0;
+}
+
+.product-form-wrapper .input-group input:focus,
+.product-form-wrapper .input-group-select select:focus {
+    outline: none;
+}
+
+/* Form containers now stack on small screens */
+.product-form-wrapper .form-container {
+    display: flex;
+    flex-direction: row;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.price-category-container{
+    display: flex;
+    justify-content: center;
+    gap: 1.5%;
+}
+
+.product-form-wrapper .first-form,
+.product-form-wrapper .second-form {
+    width: 48%;
+}
+
+@media (max-width: 768px) {
+    .product-form-wrapper .first-form,
+    .product-form-wrapper .second-form {
+        width: 100%;
+    }
+
+    .product-form-wrapper .second-form::before {
+        display: none;
+    }
+
+    .optional {
+        margin-left: 0;
+        text-align: center;
+    }
+}
+
+/* Divider line stays for desktop */
+.product-form-wrapper .second-form {
+    position: relative;
+}
+
+.product-form-wrapper .second-form::before {
+    content: "";
+    position: absolute;
+    left: -2.8%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    height: 185px;
+    background-color: rgb(190, 188, 188);
+}
+
+/* Optional text styling */
+.optional {
+    color: rgba(27, 26, 26, 0.932);
+    font-size: 22px;
+    font-weight: 600;
+    text-transform: capitalize;
+    margin-left: 52%;
+    padding-top: 20px;
+}
+
+/* Button styling remains */
+.product-form-wrapper .boton-elegante {
+    padding: 7px 15px;
+    border: 2px solid #2c2c2c;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.4s ease;
+    outline: none;
+    position: relative;
+    overflow: hidden;
+    font-weight: bold;
+}
+
+.product-form-wrapper .boton-elegante::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 70%);
+    transform: scale(0);
+    transition: transform 1.5s ease;
+}
+
+.product-form-wrapper .boton-elegante:hover::after {
+    transform: scale(4);
+}
+
+.product-form-wrapper .boton-elegante:hover {
+    color: black;
+    border-color: #272626;
+    background: rgba(255, 255, 255, 0.74);
+}

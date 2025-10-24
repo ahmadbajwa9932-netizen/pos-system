@@ -1,0 +1,38 @@
+.eye-icon{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+}
+    .eye-icon a{
+        background-color:green;
+        width: 30px;
+        text-decoration: none;
+        border-radius: 3px;
+        border: 2px solid rgb(124, 149, 150);
+        /* background: linear-gradient(45deg, #00ff9d, #00C853); */
+        /* box-shadow: 2px 0px 2px black; */
+        box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.3);
+        transition: transform 0.3s ease-in-out;
+        -webkit-border-radius: 3px;
+        -moz-border-radius: 3px;
+        -ms-border-radius: 3px;
+        -o-border-radius: 3px;
+        & i{
+            text-align: center;
+            color: white;
+            padding-left: 5px;
+            font-size: 14px;
+        }
+}
+
+
+.eye-icon a:hover {
+    transform: scale(1.2);
+    -webkit-transform: scale(1.2);
+    -moz-transform: scale(1.2);
+    -ms-transform: scale(1.2);
+    -o-transform: scale(1.2);
+}
+
+

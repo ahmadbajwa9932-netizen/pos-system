@@ -1,0 +1,37 @@
+.report-format {
+    display: inline-flex;
+    overflow: hidden;
+}
+
+.report-format button {
+    background-color: #5c6670;
+    color: white;
+    border: none;
+    font-size: 14px;
+    padding: 8px 25px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+    outline: none;
+}
+
+/* Remove the border gap */
+.report-format button:not(:last-child) {
+    border-right: none;
+}
+
+
+.report-format button:hover {
+    background-color: #4a525b;
+}
+
+.report-format :nth-child(1){
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+ .report-format button:nth-child(3){
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+
+ }
+
+ 

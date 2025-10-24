@@ -1,0 +1,90 @@
+/* Modal overlay */
+/* Overlay */
+.delete-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 9999;
+    backdrop-filter: blur(2px);
+  }
+  
+  /* Modal Box */
+  .delete-modal-content {
+    background: #ffffff;
+    padding: 28px 30px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    text-align: center;
+    font-family: "Segoe UI", sans-serif;
+    animation: fadeIn 0.2s ease-in-out;
+  }
+  
+  /* Title */
+  .delete-modal-content h3 {
+    font-size: 20px;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  
+  /* Paragraph */
+  .delete-modal-content p {
+    font-size: 14px;
+    color: #6c757d;
+    margin-bottom: 20px;
+  }
+  
+  /* Buttons Layout */
+  .delete-modal-content .btn {
+    display: inline-block;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s ease, transform 0.1s ease;
+  }
+  
+  /* Buttons (Professional colors) */
+  .btn-neutral {
+    background: #e9ecef;
+    color: #333;
+  }
+  
+  .btn-neutral:hover {
+    background: #dee2e6;
+  }
+  
+  .btn-primary {
+    background: #0d6efd;
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background: #0b5ed7;
+  }
+  
+  .btn-danger {
+    background: #dc3545;
+    color: white;
+  }
+  
+  .btn-danger:hover {
+    background: #bb2d3b;
+  }
+  
+  .delete-modal-content .btn + .btn {
+    margin-left: 8px;
+  }
+  
+  /* Animation */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }

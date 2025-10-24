@@ -1,0 +1,245 @@
+/* Entry Mode Selection Styling */
+.entry-mode {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 5px;
+    padding: 15px 20px;
+    /* background-color: #f8f9fa; */
+    border-radius: 5px;
+    /* border: 1px solid #dee2e6; */
+}
+
+.entry-mode label {
+    font-size: 16px;
+    color: #1b1c1d;
+    margin: 0;
+}
+
+.entry-mode label strong {
+    font-weight: 600;
+}
+
+.entry-mode select {
+    flex: 1;
+    max-width: 250px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #495057;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+}
+
+.entry-mode select:focus {
+    outline: none;
+    border-color: #1a1a1a;
+    box-shadow: 0 0 0 2px rgba(26, 26, 26, 0.1);
+}
+
+.entry-mode select:hover {
+    border-color: #adb5bd;
+}
+
+.expense-form-wrapper .category-amount{
+    display: flex;
+    justify-content: center;
+    gap: 1.5%;
+}
+
+.expense-form-wrapper {
+    padding: 0px 20px 20px 20px;
+    box-sizing: border-box;
+}
+
+/* Single Entry Form Styling - matching purchase form style */
+#singleExpenseForm .input-group,
+#singleExpenseForm .input-group-select {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin-bottom: 1.5%;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+#singleExpenseForm .input-group-text {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    border-right: 1px solid #ced4da;
+    white-space: nowrap;
+    font-size: 16px;
+    color: #1b1c1d;
+}
+
+#singleExpenseForm .input-group input,
+#singleExpenseForm .input-group-select select {
+    flex: 1;
+    border: none;
+    padding: 10px;
+    font-size: 14px;
+    color: #495057;
+    min-width: 0;
+}
+
+#singleExpenseForm .input-group input:focus,
+#singleExpenseForm .input-group-select select:focus {
+    outline: none;
+}
+
+#singleExpenseForm .btn-primary {
+    padding: 7px 15px;
+    border: 2px solid #2c2c2c;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.4s ease;
+    outline: none;
+    position: relative;
+    overflow: hidden;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+#singleExpenseForm .btn-primary::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 70%);
+    transform: scale(0);
+    transition: transform 1.5s ease;
+}
+
+#singleExpenseForm .btn-primary:hover::after {
+    transform: scale(4);
+}
+
+#singleExpenseForm .btn-primary:hover {
+    color: black;
+    border-color: #272626;
+    background: rgba(255, 255, 255, 0.74);
+}
+
+/* Multiple Entry Form - Table Styling (unchanged) */
+#multipleExpenseForm select,
+#multipleExpenseForm input[type="text"],
+#multipleExpenseForm input[type="number"],
+#multipleExpenseForm input[type="date"] {
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-size: 14px;
+    color: #495057;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#multipleExpenseForm select:focus,
+#multipleExpenseForm input:focus {
+    outline: none;
+    border-color: #1a1a1a;
+}
+
+#multipleExpenseForm table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+}
+
+#multipleExpenseForm th,
+#multipleExpenseForm td {
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    text-align: center;
+    font-size: 14px;
+}
+
+#multipleExpenseForm th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+#multipleExpenseForm .btn-primary {
+    background-color: #1a1a1a;
+    color: #ffffff;
+    border: 2px solid #2c2c2c;
+    padding: 7px 15px;
+    font-size: 14px;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+#multipleExpenseForm .btn-primary:hover {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+#multipleExpenseForm .btn-success {
+    background-color: #28a745;
+    border: 1px solid #218838;
+    color: white;
+    padding: 7px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+#multipleExpenseForm .btn-success:hover {
+    background-color: #218838;
+}
+
+#multipleExpenseForm .btn-danger {
+    background-color: #dc3545;
+    border: 1px solid #c82333;
+    color: white;
+    padding: 7px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#multipleExpenseForm .btn-danger:hover {
+    background-color: #c82333;
+}
+
+/* Responsive table for multiple entries */
+@media (max-width: 768px) {
+    #multipleExpenseForm table,
+    #multipleExpenseForm thead,
+    #multipleExpenseForm tbody,
+    #multipleExpenseForm th,
+    #multipleExpenseForm td,
+    #multipleExpenseForm tr {
+        display: block;
+        width: 100%;
+    }
+
+    #multipleExpenseForm thead tr {
+        display: none;
+    }
+
+    #multipleExpenseForm td {
+        text-align: right;
+        padding-left: 50%;
+        position: relative;
+    }
+
+    #multipleExpenseForm td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 15px;
+        width: 45%;
+        white-space: nowrap;
+        font-weight: bold;
+        text-align: left;
+    }
+}

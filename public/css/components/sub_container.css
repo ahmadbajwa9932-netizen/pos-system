@@ -1,0 +1,14 @@
+.sub-container {
+    display: grid;
+    gap:10px;
+    width: 100%;
+    background: white;
+    border-radius: 5px;
+    /* overflow: hidden; */
+    box-shadow: 0px 2px 5px #00000033;
+    padding: 1.5%;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    -ms-border-radius: 5px;
+    -o-border-radius: 5px;
+}

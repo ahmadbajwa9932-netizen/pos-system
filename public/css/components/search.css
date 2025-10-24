@@ -1,0 +1,48 @@
+.search-container {
+  width: 280px !important;
+  position: relative;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.search-container .input {
+  width: 100% !important;
+  height: 40px;
+  padding: 0 40px 0 12px; /* Space for icon on right */
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.search-container .input:focus {
+  outline: none;
+  border-color: #999;
+}
+
+.search-container .icon1 {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #555;
+  cursor: pointer;
+}
+
+.search-container:hover .icon1 {
+  animation: iconBounce 1s linear infinite;
+}
+
+@keyframes iconBounce {
+  0%, 100% {
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    transform: translateY(-50%) scale(1.1);
+  }
+}
+
+.icon1 svg {
+  width: 18px;
+  height: 18px;
+}

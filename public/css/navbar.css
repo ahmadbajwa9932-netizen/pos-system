@@ -1,0 +1,101 @@
+.custom-navbar-wrapper * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+.custom-navbar-wrapper .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #fff;
+    border-bottom: 2px solid #ddd;
+    position: fixed;
+    top: 0;
+    left: 250px;
+    right: 0;
+    z-index: 1000;
+    transition: left 0.3s ease-in-out;
+    height: 60px; /* Fixed height for navbar */
+}
+
+.custom-navbar-wrapper .navbar.sidebar-collapsed {
+    left: 60px; /* Adjust when sidebar is collapsed */
+}
+
+.custom-navbar-wrapper .navbar div {
+    display: flex;
+    align-items: center;
+}
+
+.custom-navbar-wrapper .navbar a,
+.custom-navbar-wrapper .navbar i {
+    text-decoration: none;
+    color: #35302d;
+    font-weight: bold;
+    margin-right: 15px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.custom-navbar-wrapper .navbar a:hover {
+    text-decoration: underline;
+}
+
+.custom-navbar-wrapper .search-box input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    outline: none;
+    width: 200px;
+    transition: 0.3s;
+}
+
+.custom-navbar-wrapper .search-box input:focus {
+    border-color: #5a2c8a;
+}
+
+.custom-navbar-wrapper .user-icons {
+    display: flex;
+    gap: 15px;
+    position: relative;
+}
+
+.custom-navbar-wrapper .user-icons i {
+    font-size: 20px;
+    color: #333;
+    cursor: pointer;
+    position: relative;
+}
+
+/* Tooltip Styling */
+.custom-navbar-wrapper .user-icons i::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.75);
+    color: white;
+    font-size: 8px;
+    padding: 5px;
+    border-radius: 5px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: 0.3s;
+    text-transform: lowercase;
+}
+
+.custom-navbar-wrapper .user-icons i:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Adjust main content when navbar is present */
+.custom-navbar-wrapper .main-content {
+    margin-top: 70px; /* Account for navbar height */
+    padding-top: 20px;
+}
