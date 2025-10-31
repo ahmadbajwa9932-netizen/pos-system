@@ -18,11 +18,10 @@ public function deleteAll()
 
     // Get all tables
     $tables = DB::select('SHOW TABLES');
-    $dbName = env('DB_DATABASE');
-    $column = "Tables_in_{$dbName}";
-
     foreach ($tables as $table) {
-        $tableName = $table->$column;
+        // Get the first (and only) key name from the returned object
+        $tableName = current((array)$table);
+    
 
         if (in_array($tableName, ['migrations', 'users'])) {
             continue; // skip migrations and users

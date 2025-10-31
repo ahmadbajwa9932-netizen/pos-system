@@ -4,7 +4,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{asset('css/sales/revenue.css')}}">
-    
+<link rel="stylesheet" href="{{asset('css/components/toggle_eye.css')}}">
 @endpush
 
 @section('content')
@@ -22,18 +22,48 @@
 
 <!-- KPI Cards -->
 <div class="kpi-grid">
-        <div class="kpi-card">
-            <h4>{{ $totalReturnsAmount > 0 ? 'Net Revenue' : 'Total Revenue' }}</h4>
-            <p>Rs {{ number_format($totalRevenue, 2) }}</p>
-            @if($totalReturnsAmount > 0)
-                <small style="color: #d63384;">After Returns: -Rs {{ number_format($totalReturnsAmount, 2) }}</small>
-            @endif
-        </div>
+<div class="kpi-card">
+    <h4>{{ $totalReturnsAmount > 0 ? 'Net Revenue' : 'Total Revenue' }}
+<svg class="toggle-visibility" onclick="toggleCardVisibility(this.closest('.kpi-card'))" 
+             width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+            <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+
+            <!-- hidden (eye slash) -->
+            <path class="eye-closed" d="M3 3l18 18"></path>
+        </svg>    
+    </h4>
+
+    <p>
+        Rs 
+        <span class="secure-value" data-value="{{ number_format($totalRevenue, 2) }}">****</span>
+    </p>
+
+    @if($totalReturnsAmount > 0)
+        <small style="color: #d63384;">
+            After Returns: -Rs 
+            <span class="secure-value" data-value="{{ number_format($totalReturnsAmount, 2) }}">****</span>
+        </small>
+    @endif
+</div>
+
         
         @if($totalReturnsAmount > 0)
         <div class="kpi-card">
-            <h4>Gross Revenue</h4>
-            <p>Rs {{ number_format($grossRevenue, 2) }}</p>
+            <h4>Gross Revenue
+            <svg class="toggle-visibility" onclick="toggleCardVisibility(this.closest('.kpi-card'))" 
+             width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+            <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+
+            <!-- hidden (eye slash) -->
+            <path class="eye-closed" d="M3 3l18 18"></path>
+        </svg>
+            </h4>
+            <p>Rs 
+                <span class="secure-value" data-value="{{ number_format($grossRevenue, 2) }}">****</span></p>
             <small style="color: #666;">Before Returns</small>
         </div>
         @endif
@@ -47,15 +77,38 @@
         </div>
         
         <div class="kpi-card">
-            <h4>Gross Profit</h4>
-            <p>Rs {{ number_format($totalProfit, 2) }}</p>
+
+            <h4>{{$totalProfit > 0 ? 'Gross Profit' : 'Gross Loss'}}
+            <svg class="toggle-visibility" onclick="toggleCardVisibility(this.closest('.kpi-card'))" 
+             width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+            <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+
+            <!-- hidden (eye slash) -->
+            <path class="eye-closed" d="M3 3l18 18"></path>
+        </svg>
+            </h4>
+            <p style="color:{{$totalProfit<0 ? 'red' : 'black'}}">Rs 
+                <span class="secure-value" data-value="{{ number_format(abs($totalProfit), 2) }}">****</span></p>
             <small style="color: #666;">Revenue - Purchase Cost</small>
         </div>
 
         <!-- Net Profit -->
 <div class="kpi-card">
-    <h4>Net Profit</h4>
-    <p>Rs {{ number_format($netProfit, 2) }}</p>
+    <h4>{{$netProfit > 0 ? 'Net Profit' : 'Net Loss'}}
+    <svg class="toggle-visibility" onclick="toggleCardVisibility(this.closest('.kpi-card'))" 
+             width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+            <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+
+            <!-- hidden (eye slash) -->
+            <path class="eye-closed" d="M3 3l18 18"></path>
+        </svg>
+    </h4>
+    <p style="color:{{$netProfit<0 ? 'red' : 'black'}}">Rs 
+        <span class="secure-value" data-value="{{ number_format(abs($netProfit), 2) }}">****</span></p>
     <small style="color: #666;">Revenue - COGS - Expenses</small>
 </div>
         
@@ -485,4 +538,5 @@ createChart('profitCategoryChart', {
     }
 });
 </script>
+<script src="{{asset('js/dashboard/toggle_eye.js')}}"></script>
 @endsection

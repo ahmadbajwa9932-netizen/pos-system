@@ -3,7 +3,22 @@
 @push('styles')
 <link rel="stylesheet" href="{{asset('css/components/container.css')}}">
 <link rel="stylesheet" href="{{ asset('css/reports/salesReport.css') }}">
+<link rel="stylesheet" href="{{asset('css/reports/toggle_eye.css')}}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    .metric-card.metric-danger .metric-value {
+    color: #dc3545 !important;
+}
+
+.text-danger {
+    color: #dc3545 !important;
+    font-weight: bold;
+}
+
+.text-success {
+    color: #28a745 !important;
+}
+</style>
 @endpush
 
 @section('content')
@@ -131,8 +146,8 @@
                                         <th class="text-right">Qty Sold</th>
                                         <th class="text-right">Revenue</th>
                                         <th class="text-right">Cost</th>
-                                        <th class="text-right">Profit</th>
-                                        <th class="text-right">Profit %</th>
+                                        <th class="text-right"><span style="color: #28a745">Profit</span>/<span style="color: #dc3545">Loss</span></th>
+                                        <th class="text-right"><span style="color: #28a745">Profit</span>/<span style="color: #dc3545">Loss</span>%</th>
                                         <th class="text-right">Avg Price</th>
                                     </tr>
                                 </thead>
@@ -179,7 +194,7 @@
                                         <th>Category</th>
                                         <th class="text-right">Revenue</th>
                                         <th class="text-right">Cost</th>
-                                        <th class="text-right">Profit</th>
+                                        <th class="text-right"><span style="color: #28a745">Profit</span>/<span style="color: #dc3545">Loss</span></th>
                                         <th class="text-right">Margin %</th>
                                         <th class="text-right">Transactions</th>
                                         <th class="text-right">Items Sold</th>
@@ -377,12 +392,17 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-let charts = {};
+// ===== FIXED VERSION WITH PROPER INITIALIZATION =====
 
-// Initialize tabs
-// Initialize tabs
+let charts = {};
+let isInitialized = false;
+
+// Wait for complete DOM and ensure all elements are ready
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM Loaded - Initializing Sales Report');
+    
+    // Ensure date inputs have values before any AJAX calls
+    initializeDateInputs();
     
     // Tab switching
     const tabLinks = document.querySelectorAll('.tab-link');
@@ -404,13 +424,58 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Load initial overview data with delay to ensure DOM is ready
-    setTimeout(() => {
-        loadOverview();
-    }, 100);
+    // Mark as initialized and load overview
+    isInitialized = true;
+    loadOverview();
 });
 
+// NEW: Ensure date inputs are properly initialized
+function initializeDateInputs() {
+    const dateRange = document.getElementById('dateRange');
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    // Verify all elements exist
+    if (!dateRange || !startDate || !endDate) {
+        console.error('Date input elements not found!');
+        return;
+    }
+    
+    // If custom dates are empty, ensure they have default values
+    if (!startDate.value || !endDate.value) {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        if (!startDate.value) {
+            startDate.value = formatDate(firstDay);
+        }
+        if (!endDate.value) {
+            endDate.value = formatDate(today);
+        }
+    }
+    
+    console.log('Date inputs initialized:', {
+        dateRange: dateRange.value,
+        startDate: startDate.value,
+        endDate: endDate.value
+    });
+}
+
+// Helper to format date as YYYY-MM-DD
+function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function loadTabData(tabId) {
+    // FIXED: Check if initialized before loading
+    if (!isInitialized) {
+        console.warn('Not yet initialized, skipping tab load');
+        return;
+    }
+    
     switch(tabId) {
         case 'overview': loadOverview(); break;
         case 'products': loadProductReport(); break;
@@ -436,111 +501,240 @@ function handleDateRangeChange() {
 }
 
 function loadAllReports() {
+    // Ensure dates are valid before loading
+    initializeDateInputs();
+    
     const activeTab = document.querySelector('.tab-link.active').getAttribute('data-tab');
     loadTabData(activeTab);
 }
 
+// FIXED: Add validation to getDateParams
 function getDateParams() {
-    const dateRange = document.getElementById('dateRange').value;
+    const dateRangeEl = document.getElementById('dateRange');
+    const startDateEl = document.getElementById('startDate');
+    const endDateEl = document.getElementById('endDate');
+    
+    // Validate elements exist
+    if (!dateRangeEl || !startDateEl || !endDateEl) {
+        console.error('Date input elements missing!');
+        return '';
+    }
+    
+    const dateRange = dateRangeEl.value;
     let params = { date_range: dateRange };
     
     if (dateRange === 'custom') {
-        params.start_date = document.getElementById('startDate').value;
-        params.end_date = document.getElementById('endDate').value;
+        const startDate = startDateEl.value;
+        const endDate = endDateEl.value;
+        
+        // Validate custom dates
+        if (!startDate || !endDate) {
+            console.error('Custom date range selected but dates are empty');
+            alert('Please select both start and end dates');
+            return '';
+        }
+        
+        params.start_date = startDate;
+        params.end_date = endDate;
     }
     
-    return new URLSearchParams(params).toString();
+    const queryString = new URLSearchParams(params).toString();
+    console.log('Date params:', queryString);
+    return queryString;
 }
 
-// 1. OVERVIEW
+
+//  FIXED: Better error handling for overview
 function loadOverview() {
-    console.log('Loading overview...', getDateParams());
+    const params = getDateParams();
+    if (!params) {
+        console.error('Invalid date parameters');
+        return;
+    }
     
-    fetch(`/reports/sales/date-range?${getDateParams()}`)
+    console.log('Loading overview with params:', params);
+    
+    // Show loading state
+    document.getElementById('comparisonCards').innerHTML = 
+        '<div class="loading-state"><div class="spinner"></div><p>Loading overview...</p></div>';
+    
+    fetch(`/reports/sales/date-range?${params}`)
         .then(response => {
-            console.log('Response received:', response.status);
+            console.log('Overview response:', response.status);
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            console.log('Data received:', data);
+            console.log('Overview data received:', data);
             displayComparisonCards(data);
             displayComparisonDetails(data);
         })
         .catch(error => {
             console.error('Error loading overview:', error);
             document.getElementById('comparisonCards').innerHTML = 
-                '<div class="error-message">Error loading data. Please refresh the page.</div>';
+                `<div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading data: ${error.message}</p>
+                    <button onclick="loadOverview()" class="btn btn-primary">Retry</button>
+                </div>`;
             document.getElementById('comparisonDetails').innerHTML = 
                 '<div class="error-message">Error loading comparison data.</div>';
         });
 }
 
 function displayComparisonCards(data) {
+const eyeIcon = `
+<svg class="toggle-visibility" onclick="toggleValue(this)" 
+    width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+    <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+    <path class="eye-closed" d="M3 3l18 18"></path>
+</svg>
+`;
     const cards = document.getElementById('comparisonCards');
     const metrics = [
         { key: 'revenue', label: 'Revenue', icon: 'fa-dollar-sign', color: 'primary' },
         { key: 'transactions', label: 'Transactions', icon: 'fa-receipt', color: 'success' },
         { key: 'items_sold', label: 'Items Sold', icon: 'fa-box', color: 'info' },
         { key: 'avg_order_value', label: 'Avg Order Value', icon: 'fa-chart-line', color: 'warning' },
-        { key: 'profit', label: 'Profit', icon: 'fa-hand-holding-usd', color: 'danger' }
+        { 
+    key: 'profit', 
+    label: data.current.profit >= 0 ? 'Profit' : 'Loss', 
+    icon: data.current.profit >= 0 ? 'fa-hand-holding-usd' : 'fa-exclamation-triangle', 
+    color: data.current.profit >= 0 ? 'success' : 'danger' 
+}
     ];
     
-    cards.innerHTML = metrics.map(metric => `
-        <div class="metric-card metric-${metric.color}">
-            <i class="fas ${metric.icon} metric-icon"></i>
-            <div class="metric-label">${metric.label}</div>
-            <div class="metric-value">${metric.key === 'transactions' || metric.key === 'items_sold' ? 
-                Math.round(data.current[metric.key]) : 
-                'Rs ' + parseFloat(data.current[metric.key]).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2})
-            }</div>
+    cards.innerHTML = metrics.map(metric => {
+    // Dynamic label and icon for profit/loss
+    let displayLabel = metric.label;
+    let displayIcon = metric.icon;
+    let displayColor = metric.color;
+    
+    if (metric.key === 'profit') {
+        if (data.current.profit < 0) {
+            displayLabel = 'Loss';
+            displayIcon = 'fa-exclamation-triangle';
+            displayColor = 'danger';
+        } else {
+            displayColor = 'success';
+        }
+    }
+    
+    return `
+        <div class="metric-card metric-${displayColor}">
+            <i class="fas ${displayIcon} metric-icon"></i>
+            <div class="metric-label">${displayLabel}</div>
+            <div class="metric-value ${metric.key === 'profit' && data.current.profit < 0 ? 'text-danger' : ''}">
+    ${
+        (metric.key === 'revenue' || metric.key === 'profit')
+        ? `
+        ${eyeIcon}</br>
+            <span class="secure-value" data-value="${
+                'Rs ' + parseFloat(Math.abs(data.current[metric.key])).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+            }">****</span>
+        `
+        :
+        (
+            metric.key === 'transactions' || metric.key === 'items_sold'
+            ? Math.round(data.current[metric.key])
+            : 'Rs ' + parseFloat(data.current[metric.key]).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+        )
+    }
+</div>
             <div class="metric-badge badge-${data.changes[metric.key].trend}">
                 <i class="fas fa-arrow-${data.changes[metric.key].trend === 'up' ? 'up' : data.changes[metric.key].trend === 'down' ? 'down' : 'right'}"></i>
                 ${Math.abs(data.changes[metric.key].percent).toFixed(1)}%
             </div>
         </div>
-    `).join('');
+    `;
+}).join('');
 }
 
 function displayComparisonDetails(data) {
+    const eyeIcon = `
+    <svg class="toggle-visibility" onclick="toggleValue(this)" 
+        width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+        <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+        <path class="eye-closed" d="M3 3l18 18"></path>
+    </svg>
+    `;
+
     const details = document.getElementById('comparisonDetails');
+
     details.innerHTML = `
         <div class="comparison-grid">
             <div class="comparison-col">
                 <h5>Current Period (${data.period.current.start} - ${data.period.current.end})</h5>
                 <table class="comparison-table">
-                    <tr><td>Revenue:</td><td class="value-bold">Rs ${parseFloat(data.current.revenue).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
+                    <tr>
+                        <td>Revenue:</td>
+                        <td class="value-bold">
+                            ${eyeIcon}
+                            <span class="secure-value" data-value="Rs ${parseFloat(data.current.revenue).toLocaleString('en-PK', {minimumFractionDigits: 2})}">****</span>
+                        </td>
+                    </tr>
                     <tr><td>Transactions:</td><td class="value-bold">${Math.round(data.current.transactions)}</td></tr>
                     <tr><td>Items Sold:</td><td class="value-bold">${Math.round(data.current.items_sold)}</td></tr>
                     <tr><td>Avg Order Value:</td><td class="value-bold">Rs ${parseFloat(data.current.avg_order_value).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
-                    <tr><td>Profit:</td><td class="value-bold">Rs ${parseFloat(data.current.profit).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
+                    <tr>
+    <td>${data.current.profit >= 0 ? 'Profit' : 'Loss'}:</td>
+    <td class="value-bold ${data.current.profit < 0 ? 'text-danger' : 'text-success'}">
+        ${eyeIcon}
+        <span class="secure-value" data-value="Rs ${parseFloat(Math.abs(data.current.profit)).toLocaleString('en-PK', {minimumFractionDigits: 2})}">****</span>
+    </td>
+</tr>
                 </table>
             </div>
+
             <div class="comparison-col">
                 <h5>Previous Period (${data.period.previous.start} - ${data.period.previous.end})</h5>
                 <table class="comparison-table">
-                    <tr><td>Revenue:</td><td>Rs ${parseFloat(data.previous.revenue).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
-                    <tr><td>Transactions:</td><td>${Math.round(data.previous.transactions)}</td></tr>
-                    <tr><td>Items Sold:</td><td>${Math.round(data.previous.items_sold)}</td></tr>
-                    <tr><td>Avg Order Value:</td><td>Rs ${parseFloat(data.previous.avg_order_value).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
-                    <tr><td>Profit:</td><td>Rs ${parseFloat(data.previous.profit).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
+                    <tr><td>Revenue:</td><td class="value-bold">${eyeIcon} <span class="secure-value" data-value="Rs ${parseFloat(data.previous.revenue).toLocaleString('en-PK', {minimumFractionDigits: 2})}"> ****</span></td></tr>
+                    <tr><td>Transactions:</td><td class="value-bold">${Math.round(data.previous.transactions)}</td></tr>
+                    <tr><td>Items Sold:</td><td class="value-bold">${Math.round(data.previous.items_sold)}</td></tr>
+                    <tr><td>Avg Order Value:</td><td class="value-bold">Rs ${parseFloat(data.previous.avg_order_value).toLocaleString('en-PK', {minimumFractionDigits: 2})}</td></tr>
+<tr>
+    <td>${data.previous.profit >= 0 ? 'Profit' : 'Loss'}:</td>
+    <td class="value-bold ${data.previous.profit < 0 ? 'text-danger' : 'text-success'}">
+        ${eyeIcon} 
+        <span class="secure-value" data-value="Rs ${parseFloat(Math.abs(data.previous.profit)).toLocaleString('en-PK', {minimumFractionDigits: 2})}">****</span>
+    </td>
+</tr>
                 </table>
             </div>
         </div>
     `;
 }
-
 // 2. PRODUCT REPORT
+// FIXED: Add error handling to all other load functions
 function loadProductReport() {
+    const params = getDateParams();
+    if (!params) return;
+    
     const sortBy = document.getElementById('productSortBy').value;
     const sortOrder = document.getElementById('productSortOrder').value;
     
-    fetch(`/reports/sales/products?${getDateParams()}&sort_by=${sortBy}&sort_order=${sortOrder}`)
-        .then(response => response.json())
+    console.log('Loading product report...');
+    
+    fetch(`/reports/sales/products?${params}&sort_by=${sortBy}&sort_order=${sortOrder}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(data => {
+            console.log('Product data loaded:', data.length, 'products');
             displayProductTable(data);
+        })
+        .catch(error => {
+            console.error('Error loading products:', error);
+            document.getElementById('productTableBody').innerHTML = 
+                `<tr><td colspan="9" class="error-message">Error: ${error.message}. <a href="#" onclick="loadProductReport(); return false;">Retry</a></td></tr>`;
         });
 }
 
@@ -575,11 +769,25 @@ function displayProductTable(products) {
 
 // 3. CATEGORY REPORT
 function loadCategoryReport() {
-    fetch(`/reports/sales/categories?${getDateParams()}`)
-        .then(response => response.json())
+    const params = getDateParams();
+    if (!params) return;
+    
+    console.log('Loading category report...');
+    
+    fetch(`/reports/sales/categories?${params}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(data => {
+            console.log('Category data loaded:', data.length, 'categories');
             displayCategoryTable(data);
             displayCategoryCharts(data);
+        })
+        .catch(error => {
+            console.error('Error loading categories:', error);
+            document.getElementById('categoryTableBody').innerHTML = 
+                `<tr><td colspan="8" class="error-message">Error: ${error.message}. <a href="#" onclick="loadCategoryReport(); return false;">Retry</a></td></tr>`;
         });
 }
 
@@ -657,22 +865,34 @@ function displayCategoryCharts(categories) {
         }
     });
 }
-
-// 4. TRANSACTION LOG
 function loadTransactionLog(page = 1) {
+    const params = getDateParams();
+    if (!params) return;
+    
     const paymentType = document.getElementById('filterPaymentType').value;
     const customerId = document.getElementById('filterCustomer').value;
-    let params = getDateParams();
+    let queryParams = params;
     
-    if (paymentType) params += `&payment_type=${paymentType}`;
-    if (customerId) params += `&customer_id=${customerId}`;
-    params += `&page=${page}`;
+    if (paymentType) queryParams += `&payment_type=${paymentType}`;
+    if (customerId) queryParams += `&customer_id=${customerId}`;
+    queryParams += `&page=${page}`;
     
-    fetch(`/reports/sales/transactions?${params}`)
-        .then(response => response.json())
+    console.log('Loading transactions...');
+    
+    fetch(`/reports/sales/transactions?${queryParams}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(data => {
+            console.log('Transaction data loaded:', data.data.length, 'transactions');
             displayTransactionTable(data);
             displayPagination(data, 'transactionPagination', loadTransactionLog);
+        })
+        .catch(error => {
+            console.error('Error loading transactions:', error);
+            document.getElementById('transactionTableBody').innerHTML = 
+                `<tr><td colspan="13" class="error-message">Error: ${error.message}. <a href="#" onclick="loadTransactionLog(); return false;">Retry</a></td></tr>`;
         });
 }
 
@@ -836,14 +1056,28 @@ function displayPagination(data, containerId, loadFunction) {
 
 // 5. TAX REPORT
 function loadTaxReport() {
+    const params = getDateParams();
+    if (!params) return;
+    
     const groupBy = document.getElementById('taxGroupBy').value;
     
-    fetch(`/reports/sales/tax?${getDateParams()}&group_by=${groupBy}`)
-        .then(response => response.json())
+    console.log('Loading tax report...');
+    
+    fetch(`/reports/sales/tax?${params}&group_by=${groupBy}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(result => {
+            console.log('Tax data loaded');
             displayTaxSummary(result.summary);
             displayTaxTable(result.data, groupBy);
             displayTaxChart(result.data, groupBy);
+        })
+        .catch(error => {
+            console.error('Error loading tax report:', error);
+            document.getElementById('taxTableBody').innerHTML = 
+                `<tr><td colspan="4" class="error-message">Error: ${error.message}. <a href="#" onclick="loadTaxReport(); return false;">Retry</a></td></tr>`;
         });
 }
 
@@ -902,13 +1136,29 @@ function displayTaxChart(data, groupBy) {
 
 // 6. TIME ANALYSIS
 function loadTimeAnalysis() {
+    const params = getDateParams();
+    if (!params) return;
+    
     const analysisType = document.getElementById('timeAnalysisType').value;
     
-    fetch(`/reports/sales/time-analysis?${getDateParams()}&analysis_type=${analysisType}`)
-        .then(response => response.json())
+    console.log('Loading time analysis...');
+    
+    fetch(`/reports/sales/time-analysis?${params}&analysis_type=${analysisType}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(result => {
+            console.log('Time analysis data loaded');
             displayTimeChart(result.data, analysisType);
             displayPeakTimes(result);
+        })
+        .catch(error => {
+            console.error('Error loading time analysis:', error);
+            document.getElementById('peakRevenueTime').innerHTML = 
+                `<div class="error-message">Error: ${error.message}</div>`;
+            document.getElementById('peakTransactionTime').innerHTML = 
+                `<div class="error-message">Error: ${error.message}</div>`;
         });
 }
 
@@ -919,7 +1169,7 @@ function displayTimeChart(data, analysisType) {
     
     let labels, revenueData;
     if (analysisType === 'hourly') {
-        labels = data.map(item => item.time_label);
+        labels = data.map(item => `${item.day_label} ${item.time_label}`);
         revenueData = data.map(item => item.revenue);
     } else if (analysisType === 'daily') {
         labels = data.map(item => item.day_name);
@@ -959,7 +1209,7 @@ function displayPeakTimes(result) {
     let timeLabel;
     
     if (analysisType === 'hourly') {
-        timeLabel = result.peak_revenue_time.time_label;
+        timeLabel = `${result.peak_revenue_time.day_label} ${result.peak_revenue_time.time_label}`;
     } else if (analysisType === 'daily') {
         timeLabel = result.peak_revenue_time.day_name;
     } else {
@@ -973,7 +1223,7 @@ function displayPeakTimes(result) {
     `;
     
     if (analysisType === 'hourly') {
-        timeLabel = result.peak_transactions_time.time_label;
+        timeLabel = `${result.peak_transactions_time.day_label} ${result.peak_transactions_time.time_label}`;
     } else if (analysisType === 'daily') {
         timeLabel = result.peak_transactions_time.day_name;
     } else {
@@ -1040,5 +1290,5 @@ function printReport() {
     window.print();
 }
 </script>
-
+<script src="{{asset('js/salesReports/toggle_eye.js')}}"></script>
 @endsection

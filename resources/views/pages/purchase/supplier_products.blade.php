@@ -14,10 +14,27 @@
 <!-- <link rel="stylesheet" href="{{ asset('css/components/popup.css') }}"> -->
 <link rel="stylesheet" href="{{ asset('css/components/pagination.css') }}">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+<style>
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
+    color: #666;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
 @endpush
 
 @section('content')
@@ -68,75 +85,21 @@
             <th>Actions</th> -->
         </tr>
     </thead>
-    <tbody>
-    @forelse ($purchases as $index => $purchase)
+    <tbody id="purchasesTableBody">
+    <!-- Loading spinner -->
     <tr>
-        <td>{{ $purchases->firstItem() + $index }}</td>
-        <td>{{ $purchase->product_name }}</td>
-        <td>{{ $purchase->category->name }}</td>
-        <td>Rs {{ number_format($purchase->purchased_price, 2) }}</td>
-        <!-- <td>Rs {{ number_format($purchase->price, 2) }}</td> -->
-        <td>{{ number_format($purchase->quantity,0) }}</td>
-        <td>{{$purchase->unit}}</td>
-        <td>Rs {{ number_format($purchase->purchased_price * $purchase->quantity, 2) }}</td>
-        <td>{{ \Carbon\Carbon::parse($purchase->purchase_date)->format('j-M-Y') }}</td>
+        <td colspan="8">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading purchases...</p>
+            </div>
+        </td>
     </tr>
-        @empty
-            <tr>
-                <td colspan="9">No Record found.</td>
-            </tr>
-        @endforelse
-    </tbody>
+</tbody>
 </table>
 
 
-<div class="custom-pagination">
-        @if ($purchases->onFirstPage())
-            <span class="disabled">« First</span>
-        @else
-            <a class="ajax-link" href="{{ $purchases->url(1) }}">« First</a>
-        @endif
-
-        {{-- Previous Page Link --}}
-        @if ($purchases->onFirstPage())
-            <span class="disabled">←</span>
-        @else
-            <a href="{{ $purchases->previousPageUrl() }}" rel="prev">←</a>
-        @endif
-
-        @php
-            $start = max($purchases->currentPage() - 2, 1);
-            $end = min($purchases->currentPage() + 2, $purchases->lastPage());
-        @endphp
-
-        @if ($start > 1)
-            <span class="dots">...</span>
-        @endif
-
-        @for ($page = $start; $page <= $end; $page++)
-            @if ($page == $purchases->currentPage())
-                <span class="active">{{ $page }}</span>
-            @else
-                <a href="{{ $purchases->url($page) }}">{{ $page }}</a>
-            @endif
-        @endfor
-
-        @if ($end < $purchases->lastPage())
-            <span class="dots">...</span>
-        @endif
-
-        {{-- Next Page Link --}}
-        @if ($purchases->hasMorePages())
-            <a href="{{ $purchases->nextPageUrl() }}" rel="next">→</a>
-        @else
-            <span class="disabled">→</span>
-        @endif
-
-        @if ($purchases->hasMorePages())
-            <a href="{{ $purchases->url($purchases->lastPage()) }}">Last »</a>
-        @else
-            <span class="disabled">Last »</span>
-        @endif
+<div class="custom-pagination"  id="paginationContainer">
     </div>
 </div>
 </div>
@@ -162,6 +125,113 @@
         <button class="print-close-btn" id="closePrintPopup" style="width:50%;">Cancel</button>
     </div>
 </div>
+<script>
+// Get supplier ID from the page
+const supplierId = {{ $supplier->id }};
+let currentPage = 1;
+
+// Load purchases on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadPurchases(1);
+});
+
+// Function to load purchases via AJAX
+function loadPurchases(page) {
+    currentPage = page;
+    
+    fetch(`/supplier/show/${supplierId}/purchases?page=${page}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            renderTable(data.data, data.pagination);
+            renderPagination(data.pagination);
+        } else {
+            showError('Failed to load purchases');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('An error occurred while loading purchases');
+    });
+}
+
+// Render table rows - ADJUST COLUMNS based on your actual table structure
+function renderTable(purchases, pagination) {
+    const tbody = document.getElementById('purchasesTableBody');
+    
+    if (purchases.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8">No purchases found.</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    purchases.forEach((purchase, index) => {
+        const rowNumber = pagination.first_item + index;
+        
+        html += `
+            <tr>
+                <td>${rowNumber}</td>
+                <td>${purchase.product_name}</td>
+                <td>${purchase.category ? purchase.category.name : 'N/A'}</td>
+                <td>Rs ${formatNumber(purchase.purchased_price)}</td>
+                <td>${purchase.quantity}</td>
+                <td>${purchase.unit}</td>
+                <td>Rs ${formatNumber(purchase.purchased_price * purchase.quantity)}</td>
+                <td>${formatDate(purchase.purchase_date)}</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Render pagination
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    
+    let html = '';
+    
+    if (pagination.on_first_page) {
+        html += '<span class="disabled">←</span>';
+    } else {
+        html += `<a href="javascript:void(0)" onclick="loadPurchases(${pagination.current_page - 1})">←</a>`;
+    }
+    
+    html += `<span class="active">${pagination.current_page}</span>`;
+    
+    if (pagination.has_more_pages) {
+        html += `<a href="javascript:void(0)" onclick="loadPurchases(${pagination.current_page + 1})">→</a>`;
+    } else {
+        html += '<span class="disabled">→</span>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Helper functions
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'N/A';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function formatNumber(num) {
+    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+}
+
+function showError(message) {
+    const tbody = document.getElementById('purchasesTableBody');
+    tbody.innerHTML = `<tr><td colspan="8" style="color: red; text-align: center;">${message}</td></tr>`;
+}
+</script>
 <script src="{{asset('js/search.js')}}"></script>
 <script src="{{asset('js/pdf_popup.js')}}"></script>
 <script src="{{asset('js/print_popup.js')}}"></script>

@@ -15,10 +15,7 @@
 <link rel="stylesheet" href="{{ asset('css/components/popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/pdf_popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/pagination.css') }}">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="{{ asset('css/components/loading-spinner.css') }}">
 <style>
     #customerSearchType, #customerTypeFilter {
     padding: 8px 12px;
@@ -113,129 +110,20 @@
             <th>Action</th>
         </tr>
     </thead>
-    <tbody>
-    @forelse($customers as $index => $customer)
-            <tr>
-            <td>{{ $index + 1 }}</td>
-                        <td style="text-align:left;">
-                            <button class="toggle-details" data-id="{{ $customer->id }}" style="background:none;border:none;cursor:pointer;">
-                                &#x25BC;
-                            </button>
-                            {{ $customer->name ?? 'Walk-in Customer' }}
-                        </td>
-                        <td>{{ $customer->shop_name ?? 'N/A' }}</td>
-                        <td>{{ $customer->contact ?? 'N/A' }}</td>
-                        <td>{{ $customer->city ?? 'N/A' }}</td>
-                        <td>{{ $customer->sales_count }}</td>
-                        <td>
-                            @php
-                                $hasCreditSales = isset($salesBreakdown[$customer->id]['credit']) && $salesBreakdown[$customer->id]['credit']->count > 0;
-                            @endphp
-                            {{ $hasCreditSales ? 'Yes' : 'No' }}
-                        </td>
-                        <td>
-                            @if($customer->sales->isNotEmpty())
-                                {{ $customer->sales->first()->created_at->timezone('Asia/Karachi')->format('Y-m-d g:i:A') }}
-                            @else
-                                N/A
-                            @endif
-                        </td>
-                <td><a href="{{ route('customers.purchases', $customer->id) }}"><i style="font-size:18px; margin-left:13px; color:#5c6670" class="fa fa-eye"></i></a></td>
-                <td><button type="button"
-        id="delete-button"
-        class="delete-button"
-        data-action="{{ route('customers.destroy', $customer->id) }}"
-        onclick="openDeleteModal(this)">
-    Delete
-</button></td>
-            </tr>
-            <!-- Expandable details row -->
-            <tr class="details-row" id="details-{{ $customer->id }}" style="display:none;background:#f9f9f9;">
-                <td colspan="10">
-                    <table class="table table-sm" style="width:100%;border-collapse:collapse;">
-                        <thead>
-                            <tr>
-                                <th>Payment Type</th>
-                                <th>Number of Sales</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @php
-                                $breakdown = $salesBreakdown[$customer->id] ?? [];
-                                $types = ['credit', 'cash', 'card'];
-                            @endphp
-                            @foreach($types as $type)
-                                @if(isset($breakdown[$type]))
-                                <tr>
-                                    <td>{{ ucfirst($type) }}</td>
-                                    <td>{{ $breakdown[$type]->count }}</td>
-                                </tr>
-                                @endif
-                            @endforeach
-                            @if(count($breakdown) == 0)
-                            <tr>
-                                <td colspan="2">No sales found.</td>
-                            </tr>
-                            @endif
-                        </tbody>
-                    </table>
-                </td>
-            </tr>
-        @empty
-            <tr>
-                <td colspan="10">No Record found.</td>
-            </tr>
-        @endforelse
-    </tbody>
+    <tbody id="customerTableBody">
+    <!-- Loading spinner -->
+    <tr>
+        <td colspan="10">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading customers...</p>
+            </div>
+        </td>
+    </tr>
+</tbody>
 </table>
 
-    <div class="custom-pagination">
-        @if ($customers->onFirstPage())
-            <span class="disabled">« First</span>
-        @else
-            <a class="ajax-link" href="{{ $customers->url(1) }}">« First</a>
-        @endif
-
-        {{-- Previous Page Link --}}
-        @if ($customers->onFirstPage())
-            <span class="disabled">←</span>
-        @else
-            <a href="{{ $customers->previousPageUrl() }}" rel="prev">←</a>
-        @endif
-
-        @php
-            $start = max($customers->currentPage() - 2, 1);
-            $end = min($customers->currentPage() + 2, $customers->lastPage());
-        @endphp
-
-        @if ($start > 1)
-            <span class="dots">...</span>
-        @endif
-
-        @for ($page = $start; $page <= $end; $page++)
-            @if ($page == $customers->currentPage())
-                <span class="active">{{ $page }}</span>
-            @else
-                <a href="{{ $customers->url($page) }}">{{ $page }}</a>
-            @endif
-        @endfor
-
-        @if ($end < $customers->lastPage())
-            <span class="dots">...</span>
-        @endif
-
-        {{-- Next Page Link --}}
-        @if ($customers->hasMorePages())
-            <a href="{{ $customers->nextPageUrl() }}" rel="next">→</a>
-        @else
-            <span class="disabled">→</span>
-        @endif
-
-        @if ($customers->hasMorePages())
-            <a href="{{ $customers->url($customers->lastPage()) }}">Last »</a>
-        @else
-            <span class="disabled">Last »</span>
-        @endif
+    <div class="custom-pagination" id="paginationContainer">
     </div>
 </div>
 </div>
@@ -283,8 +171,205 @@
     </div>
 </div>
 <script>
+// Global variables
+let currentPage = 1;
+let allCustomers = [];
+let allSalesBreakdown = {};
+
+// Load customers on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // ========== TOGGLE EXPANDABLE ROWS ==========
+    loadCustomers(1);
+});
+
+// Function to load customers via AJAX
+function loadCustomers(page) {
+    currentPage = page;
+    
+    fetch(`{{ route('customers.data') }}?page=${page}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            allCustomers = data.data;
+            allSalesBreakdown = data.salesBreakdown;
+            renderTable(data.data, data.salesBreakdown, data.pagination);
+            renderPagination(data.pagination);
+            attachToggleHandlers();
+            filterTable(); // Apply any active filters
+        } else {
+            showError('Failed to load customers');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('An error occurred while loading customers');
+    });
+}
+
+// Helper functions
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+
+    const date = new Date(dateString);
+
+    const day = String(date.getDate()).padStart(2, '0');
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = monthNames[date.getMonth()];
+
+    const year = date.getFullYear();
+
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+
+    return `${day}-${month}-${year} ${hours}:${minutes} ${ampm}`;
+}
+
+// Render table rows
+function renderTable(customers, salesBreakdown, pagination) {
+    const tbody = document.getElementById('customerTableBody');
+    
+    if (customers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10">No Record found.</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    customers.forEach((customer, index) => {
+        const rowNumber = pagination.first_item + index;
+        const hasCreditSales = salesBreakdown[customer.id] && salesBreakdown[customer.id].credit && salesBreakdown[customer.id].credit.count > 0;
+        const lastPurchase = customer.sales && customer.sales.length > 0 ? customer.sales[0].created_at : null;
+        
+        html += `
+            <tr>
+                <td>${rowNumber}</td>
+                <td style="text-align:left;">
+                    <button class="toggle-details" data-id="${customer.id}" style="background:none;border:none;cursor:pointer;">
+                        &#x25BC;
+                    </button>
+                    ${customer.name || 'Walk-in Customer'}
+                </td>
+                <td>${customer.shop_name || 'N/A'}</td>
+                <td>${customer.contact || 'N/A'}</td>
+                <td>${customer.city || 'N/A'}</td>
+                <td>${customer.sales_count || 0}</td>
+                <td>${hasCreditSales ? 'Yes' : 'No'}</td>
+                <td>${formatDateTime(lastPurchase) || 'N/A'}</td>
+                <td><a href="/customers/${customer.id}/purchases"><i style="font-size:18px; margin-left:13px; color:#5c6670" class="fa fa-eye"></i></a></td>
+                <td>
+                    <button type="button"
+                        id="delete-button"
+                        class="delete-button"
+                        data-action="/customers/${customer.id}/delete"
+                        onclick="openDeleteModal(this)">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+            <tr class="details-row" id="details-${customer.id}" style="display:none;background:#f9f9f9;">
+                <td colspan="10">
+                    <table class="table table-sm" style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr>
+                                <th>Payment Type</th>
+                                <th>Number of Sales</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${renderSalesBreakdown(customer.id, salesBreakdown)}
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Render sales breakdown
+function renderSalesBreakdown(customerId, salesBreakdown) {
+    const breakdown = salesBreakdown[customerId] || {};
+    const types = ['credit', 'cash', 'card'];
+    let html = '';
+    let hasData = false;
+    
+    types.forEach(type => {
+        if (breakdown[type]) {
+            html += `
+                <tr>
+                    <td>${type.charAt(0).toUpperCase() + type.slice(1)}</td>
+                    <td>${breakdown[type].count}</td>
+                </tr>
+            `;
+            hasData = true;
+        }
+    });
+    
+    if (!hasData) {
+        html = '<tr><td colspan="2">No sales found.</td></tr>';
+    }
+    
+    return html;
+}
+
+// Render pagination
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    
+    if (pagination.last_page <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    if (pagination.on_first_page) {
+        html += '<span class="disabled">« First</span>';
+        html += '<span class="disabled">←</span>';
+    } else {
+        html += `<a href="javascript:void(0)" onclick="loadCustomers(1)">« First</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadCustomers(${pagination.current_page - 1})">←</a>`;
+    }
+    
+    const start = Math.max(pagination.current_page - 2, 1);
+    const end = Math.min(pagination.current_page + 2, pagination.last_page);
+    
+    if (start > 1) html += '<span class="dots">...</span>';
+    
+    for (let page = start; page <= end; page++) {
+        if (page === pagination.current_page) {
+            html += `<span class="active">${page}</span>`;
+        } else {
+            html += `<a href="javascript:void(0)" onclick="loadCustomers(${page})">${page}</a>`;
+        }
+    }
+    
+    if (end < pagination.last_page) html += '<span class="dots">...</span>';
+    
+    if (pagination.has_more_pages) {
+        html += `<a href="javascript:void(0)" onclick="loadCustomers(${pagination.current_page + 1})">→</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadCustomers(${pagination.last_page})">Last »</a>`;
+    } else {
+        html += '<span class="disabled">→</span>';
+        html += '<span class="disabled">Last »</span>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Toggle expandable rows
+function attachToggleHandlers() {
     document.querySelectorAll('.toggle-details').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -293,148 +378,92 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!detailsRow) return;
 
             const isOpen = detailsRow.classList.contains('open-by-toggle');
-            const nestedTable = detailsRow.querySelector('table');
 
             if (isOpen) {
-                // close
                 detailsRow.classList.remove('open-by-toggle');
                 detailsRow.style.display = 'none';
-                this.innerHTML = '\u25BC'; // down arrow
+                this.innerHTML = '\u25BC';
             } else {
-                // before opening, make sure it wasn't hidden by search
-                detailsRow.classList.remove('search-hidden');
-
-                // restore nested table display (tbody/tr) to make sure rows are visible
-                if (nestedTable) {
-                    nestedTable.style.display = 'table';
-                    // tbody
-                    nestedTable.querySelectorAll('tbody').forEach(tbody => {
-                        tbody.style.display = 'table-row-group';
-                        // each row inside details table
-                        tbody.querySelectorAll('tr').forEach(tr => {
-                            tr.style.display = 'table-row';
-                            tr.classList.remove('search-hidden'); // remove if search hid them
-                        });
-                    });
-
-                    // force reflow/repaint so browser renders tbody rows correctly
-                    void nestedTable.offsetHeight;
-                }
-
-                // show details row
                 detailsRow.style.display = 'table-row';
                 detailsRow.classList.add('open-by-toggle');
-                this.innerHTML = '\u25B2'; // up arrow
+                this.innerHTML = '\u25B2';
             }
         });
     });
+}
 
-    // ========== FUZZY SEARCH WITH EXPANDABLE ROWS SUPPORT ==========
-    const searchInput = document.getElementById("customerSearchInput");
-    const searchType = document.getElementById("customerSearchType");
-    const customerTypeFilter = document.getElementById("customerTypeFilter");
-    
-    const mainTable = document.querySelector('.sub-container > table') || document.querySelector('table');
-    if (!mainTable) return;
-    const tbody = mainTable.querySelector('tbody');
+// Search and filter functionality
+const searchInput = document.getElementById("customerSearchInput");
+const searchType = document.getElementById("customerSearchType");
+const customerTypeFilter = document.getElementById("customerTypeFilter");
 
-    function fuzzyMatch(text, token) {
-        if (!token) return true;
-        let tIndex = 0;
-        for (let i = 0; i < text.length && tIndex < token.length; i++) {
-            if (text[i] === token[tIndex]) tIndex++;
-        }
-        return tIndex === token.length;
+function fuzzyMatch(text, token) {
+    if (!token) return true;
+    let tIndex = 0;
+    for (let i = 0; i < text.length && tIndex < token.length; i++) {
+        if (text[i] === token[tIndex]) tIndex++;
     }
+    return tIndex === token.length;
+}
 
-    function filterTable() {
-        const filter = searchInput.value.toLowerCase().trim();
-        const tokens = filter === '' ? [] : filter.split(/\s+/);
-        const type = (searchType && searchType.value) ? searchType.value : 'customer';
-        const selectedCustomerType = customerTypeFilter.value;
+function filterTable() {
+    const filter = searchInput.value.toLowerCase().trim();
+    const tokens = filter === '' ? [] : filter.split(/\s+/);
+    const type = searchType.value;
+    const selectedCustomerType = customerTypeFilter.value;
 
-        // select only parent rows (skip details rows)
-        const mainRows = tbody.querySelectorAll('tr:not(.details-row)');
+    const tbody = document.getElementById('customerTableBody');
+    const mainRows = tbody.querySelectorAll('tr:not(.details-row)');
 
-        mainRows.forEach(row => {
-            const cells = row.querySelectorAll('td');
-            if (!cells || cells.length < 2) {
-                row.classList.remove('search-hidden');
-                row.style.display = '';
-                return;
+    mainRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (!cells || cells.length < 2) return;
+
+        const customerName = (cells[1]?.innerText || '').toLowerCase();
+        const shopName = (cells[2]?.innerText || '').toLowerCase();
+        const contact = (cells[3]?.innerText || '').toLowerCase();
+        const nextRow = row.nextElementSibling;
+
+        let textToSearch = '';
+        if (type === 'customer') textToSearch = customerName;
+        else if (type === 'shop_name') textToSearch = shopName;
+        else if (type === 'contact') textToSearch = contact;
+
+        let matchesSearch = tokens.length === 0 || tokens.every(token => textToSearch.includes(token) || fuzzyMatch(textToSearch, token));
+
+        let matchesType = true;
+        if (selectedCustomerType !== 'all' && nextRow && nextRow.classList.contains('details-row')) {
+            const nestedTable = nextRow.querySelector('table');
+            if (nestedTable) {
+                const paymentTypes = Array.from(nestedTable.querySelectorAll('tbody tr td:first-child')).map(td => td.innerText.toLowerCase());
+                matchesType = paymentTypes.includes(selectedCustomerType);
             }
+        }
 
-            const customerName = (cells[1]?.innerText || '').toLowerCase();
-            const shopName = (cells[2]?.innerText || '').toLowerCase();
-            const contact = (cells[3]?.innerText || '').toLowerCase();
-            const nextRow = row.nextElementSibling;
-
-            let textToSearch = '';
-            if (type === 'customer') textToSearch = customerName;
-            else if (type === 'shop_name') textToSearch = shopName;
-            else if (type === 'contact') textToSearch = contact;
-
-            // decide match using substring + fuzzy fallback
-            let matchesSearch;
-            if (tokens.length === 0) matchesSearch = true;
-            else matchesSearch = tokens.every(token => textToSearch.includes(token) || fuzzyMatch(textToSearch, token));
-
-            // ✅ Customer type filter logic (check nested table for payment types)
-            let matchesType = true;
-            if (selectedCustomerType !== 'all' && nextRow && nextRow.classList.contains('details-row')) {
-                const nestedTable = nextRow.querySelector('table');
-                if (nestedTable) {
-                    const paymentTypes = Array.from(
-                        nestedTable.querySelectorAll('tbody tr td:first-child')
-                    ).map(td => td.innerText.toLowerCase());
-                    
-                    matchesType = paymentTypes.includes(selectedCustomerType);
-                }
-            }
-
-            if (matchesSearch && matchesType) {
-                // show parent row
-                row.classList.remove('search-hidden');
-                row.style.display = '';
-
-                // show detail row but keep it closed unless previously opened by user
-                if (nextRow && nextRow.classList.contains('details-row')) {
-                    nextRow.classList.remove('search-hidden');
-                    // if user had it open before, keep visible; otherwise keep closed (clean view)
-                    if (!nextRow.classList.contains('open-by-toggle')) {
-                        nextRow.style.display = 'none';
-                    } else {
-                        // if it was open-by-toggle, ensure nested table rows are visible
-                        const nestedTable = nextRow.querySelector('table');
-                        if (nestedTable) {
-                            nestedTable.style.display = 'table';
-                            nestedTable.querySelectorAll('tbody').forEach(tbody => {
-                                tbody.style.display = 'table-row-group';
-                                tbody.querySelectorAll('tr').forEach(tr => {
-                                    tr.style.display = 'table-row';
-                                    tr.classList.remove('search-hidden');
-                                });
-                            });
-                            void nestedTable.offsetHeight;
-                        }
-                        nextRow.style.display = 'table-row';
-                    }
-                }
-            } else {
-                // hide both parent and detail safely using class
-                row.classList.add('search-hidden');
-                row.style.display = 'none';
-                if (nextRow && nextRow.classList.contains('details-row')) {
-                    nextRow.classList.add('search-hidden');
+        if (matchesSearch && matchesType) {
+            row.style.display = '';
+            if (nextRow && nextRow.classList.contains('details-row')) {
+                if (!nextRow.classList.contains('open-by-toggle')) {
                     nextRow.style.display = 'none';
                 }
             }
-        });
-    }
+        } else {
+            row.style.display = 'none';
+            if (nextRow && nextRow.classList.contains('details-row')) {
+                nextRow.style.display = 'none';
+            }
+        }
+    });
+}
 
-    searchInput.addEventListener('input', filterTable);
-    customerTypeFilter.addEventListener('change', filterTable);
-});
+searchInput.addEventListener('input', filterTable);
+searchType.addEventListener('change', filterTable);
+customerTypeFilter.addEventListener('change', filterTable);
+
+function showError(message) {
+    const tbody = document.getElementById('customerTableBody');
+    tbody.innerHTML = `<tr><td colspan="10" style="color: red; text-align: center;">${message}</td></tr>`;
+}
 </script>
 <script src="{{asset('js/delete_modal.js')}}"></script>
 <script src="{{asset('js/pdf_popup.js')}}"></script>

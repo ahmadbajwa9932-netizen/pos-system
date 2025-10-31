@@ -9,6 +9,26 @@
 <link rel="stylesheet" href="{{ asset('css/components/pagination.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/popup.css') }}">
 <style>
+    /* Loading spinner styles */
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
+    color: #666;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
     .danger-row {
     background-color: #ffe6e6 !important;
     color:rgb(107, 92, 92) !important;
@@ -100,68 +120,19 @@
                     <th>Action</th>
                 </tr>
             </thead>
-            <tbody>
-                @forelse($purchases as $index => $purchase)
-                <tr class="{{ $purchase->remaining == 0 ? 'danger-row' : '' }}">
-                <td>{{ $index + 1 }}</td>
-                        <td>{{ $purchase->product_name }}</td>
-                        <td>{{ $purchase->category->name ?? 'N/A' }}</td>
-                        <td>{{ $purchase->supplier->name ?? 'N/A' }}</td>
-                        <td style="color: red; font-weight: bold;">{{ number_format($purchase->remaining,0) }}</td>
-                        <td>{{ \Carbon\Carbon::parse($purchase->purchase_date)->format('d M Y') }}</td>
-                        <td>
-                            <button class="restock-btn" onclick="openRestockModal({{ $purchase->id }}, '{{ $purchase->product_name }}', '{{ \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') }}')">
-                                Restock
-                            </button>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="11" style="text-align:center;">No low inventory products found.</td>
-                    </tr>
-                @endforelse
+            <tbody id="lowInventoryTableBody">
+                <tr>
+                    <td colspan="7">
+                    <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading low inventory products...</p>
+            </div>
+                    </td>
+                </tr>
             </tbody>
         </table>
-        <div class="custom-pagination">
-            {{-- First & Previous --}}
-            @if ($purchases->onFirstPage())
-                <span class="disabled">« First</span>
-                <span class="disabled">←</span>
-            @else
-                <a href="{{ $purchases->url(1) }}">« First</a>
-                <a href="{{ $purchases->previousPageUrl() }}">←</a>
-            @endif
-
-            {{-- Page Numbers --}}
-            @php
-                $start = max($purchases->currentPage() - 2, 1);
-                $end = min($purchases->currentPage() + 2, $purchases->lastPage());
-            @endphp
-
-            @if ($start > 1)
-                <span class="dots">...</span>
-            @endif
-
-            @for ($page = $start; $page <= $end; $page++)
-                @if ($page == $purchases->currentPage())
-                    <span class="active">{{ $page }}</span>
-                @else
-                    <a href="{{ $purchases->url($page) }}">{{ $page }}</a>
-                @endif
-            @endfor
-
-            @if ($end < $purchases->lastPage())
-                <span class="dots">...</span>
-            @endif
-
-            {{-- Next & Last --}}
-            @if ($purchases->hasMorePages())
-                <a href="{{ $purchases->nextPageUrl() }}">→</a>
-                <a href="{{ $purchases->url($purchases->lastPage()) }}">Last »</a>
-            @else
-                <span class="disabled">→</span>
-                <span class="disabled">Last »</span>
-            @endif
+        <div class="custom-pagination" id="paginationContainer">
+            <!-- Pagination links will be dynamically inserted here -->
         </div>
     </div>
 </div>
@@ -190,15 +161,211 @@
 </div>
 
 <script>
-function openRestockModal(id, name,date) {
+// Global variables
+let currentPage = 1;
+
+// Load low inventory products on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadLowInventory(1);
+    
+    // Check for flash messages in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const successMsg = urlParams.get('success');
+    const errorMsg = urlParams.get('error');
+    
+    if (successMsg) {
+        showPopupMessage(successMsg, 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (errorMsg) {
+        showPopupMessage(errorMsg, 'error');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+// Function to load low inventory products via AJAX
+function loadLowInventory(page) {
+    currentPage = page;
+    
+    fetch(`{{ route('purchase.lowInventory.data') }}?page=${page}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            renderTable(data.data, data.pagination);
+            renderPagination(data.pagination);
+        } else {
+            showError('Failed to load low inventory products');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('An error occurred while loading products');
+    });
+}
+
+// Render table rows
+function renderTable(purchases, pagination) {
+    const tbody = document.getElementById('lowInventoryTableBody');
+    
+    if (purchases.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No low inventory products found.</td></tr>';
+        return;
+    }
+
+    // 🔍 DEBUG - Check what data we're getting
+    console.log('First purchase object:', purchases[0]);
+    console.log('Purchase date field:', purchases[0].purchase_date);
+    console.log('Created at field:', purchases[0].created_at);
+    
+    let html = '';
+    purchases.forEach((purchase, index) => {
+        const rowNumber = pagination.first_item + index;
+        const isDanger = purchase.remaining == 0;
+        
+        html += `
+            <tr class="${isDanger ? 'danger-row' : ''}">
+                <td>${rowNumber}</td>
+                <td>${purchase.product_name}</td>
+                <td>${purchase.category ? purchase.category.name : 'N/A'}</td>
+                <td>${purchase.supplier ? purchase.supplier.name : 'N/A'}</td>
+                <td style="color: red; font-weight: bold;">${formatNumber(purchase.remaining)}</td>
+                <td>${formatDate(purchase.purchase_date)}</td>
+                <td>
+                    <button class="restock-btn" onclick="openRestockModal(${purchase.id}, '${purchase.product_name}', '${formatDateInput(purchase.purchase_date)}')">
+                        Restock
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Render pagination
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    
+    if (pagination.last_page <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    if (pagination.on_first_page) {
+        html += '<span class="disabled">« First</span>';
+        html += '<span class="disabled">←</span>';
+    } else {
+        html += `<a href="javascript:void(0)" onclick="loadLowInventory(1)">« First</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadLowInventory(${pagination.current_page - 1})">←</a>`;
+    }
+    
+    const start = Math.max(pagination.current_page - 2, 1);
+    const end = Math.min(pagination.current_page + 2, pagination.last_page);
+    
+    if (start > 1) {
+        html += '<span class="dots">...</span>';
+    }
+    
+    for (let page = start; page <= end; page++) {
+        if (page === pagination.current_page) {
+            html += `<span class="active">${page}</span>`;
+        } else {
+            html += `<a href="javascript:void(0)" onclick="loadLowInventory(${page})">${page}</a>`;
+        }
+    }
+    
+    if (end < pagination.last_page) {
+        html += '<span class="dots">...</span>';
+    }
+    
+    if (pagination.has_more_pages) {
+        html += `<a href="javascript:void(0)" onclick="loadLowInventory(${pagination.current_page + 1})">→</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadLowInventory(${pagination.last_page})">Last »</a>`;
+    } else {
+        html += '<span class="disabled">→</span>';
+        html += '<span class="disabled">Last »</span>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Restock modal functions
+function openRestockModal(id, name, date) {
     document.getElementById('purchaseId').value = id;
     document.getElementById('restockProductName').innerText = 'Restock ' + name;
-    document.getElementById('purchaseDate').value = date;   
+    document.getElementById('purchaseDate').value = date;
     document.getElementById('restockModal').style.display = 'flex';
 }
 
 function closeRestockModal() {
     document.getElementById('restockModal').style.display = 'none';
 }
+
+// Helper functions
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    return `${day} ${month} ${year}`;
+}
+
+function formatDateInput(dateString) {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatNumber(num) {
+    return Math.floor(num);
+}
+
+function showError(message) {
+    const tbody = document.getElementById('lowInventoryTableBody');
+    tbody.innerHTML = `<tr><td colspan="7" style="color: red; text-align: center;">${message}</td></tr>`;
+}
+
+function showPopupMessage(message, type) {
+    let popup = document.getElementById('popup-message');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'popup-message';
+        popup.className = 'popup';
+        document.body.insertBefore(popup, document.body.firstChild);
+    }
+    popup.textContent = message;
+    popup.className = `popup ${type}`;
+    popup.style.display = 'block';
+    
+    setTimeout(() => {
+        popup.style.display = 'none';
+    }, 3000);
+}
+
+// Handle restock form submission to reload data
+document.getElementById('restockForm')?.addEventListener('submit', function(e) {
+    // Let form submit normally, but reload data after redirect back
+    setTimeout(() => {
+        loadLowInventory(currentPage);
+    }, 100);
+});
 </script>
 @endsection

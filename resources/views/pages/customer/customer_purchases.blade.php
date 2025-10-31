@@ -303,13 +303,27 @@
                                     <strong>Rs {{ number_format($sale['adjusted_discount_amount'], 2) }}</strong>
                                 </div>
                                 <div class="summary-item">
-                                    <span>Original Tax:</span>
-                                    <strong class="strikethrough">Rs {{ number_format($sale['tax'], 2) }}</strong>
-                                </div>
-                                <div class="summary-item">
-                                    <span>Adjusted Tax:</span>
-                                    <strong>Rs {{ number_format($sale['adjusted_tax'], 2) }}</strong>
-                                </div>
+    <span>Original Tax:</span>
+    <strong class="strikethrough">
+        @if($sale['tax_type'] === 'percentage')
+            {{ number_format($sale['tax'], 0) }}% (Rs {{ number_format($sale['tax_amount'], 2) }})
+        @else
+            Rs {{ number_format($sale['tax_amount'], 2) }}
+        @endif
+    </strong>
+</div>
+<div class="summary-item">
+    <span>Adjusted Tax:</span>
+    <strong>
+        @if($sale['tax_type'] === 'percentage')
+        {{ number_format(($sale['adjusted_subtotal'] > 0 ? ($sale['adjusted_tax'] / $sale['adjusted_subtotal']) * 100 : 0), 1) }}% 
+        (Rs {{ number_format($sale['adjusted_tax'], 2) }})
+        @else
+            Rs {{ number_format($sale['adjusted_tax'], 2) }}
+        @endif
+    </strong>
+</div>
+
                                 <div class="summary-item" style="border-top: 2px solid #e74c3c; padding-top: 10px;">
                                     <span>Total Returned Amount:</span>
                                     <strong style="color: #e74c3c;">-Rs {{ number_format($sale['total_returned_amount'], 2) }}</strong>
@@ -333,9 +347,16 @@
                                     <strong>Rs {{ number_format($sale['discount_amount'], 2) }}</strong>
                                 </div>
                                 <div class="summary-item">
-                                    <span>Tax:</span>
-                                    <strong>Rs {{ number_format($sale['tax'], 2) }}</strong>
-                                </div>
+    <span>Tax:</span>
+    <strong>
+        @if($sale['tax_type'] === 'percentage')
+            {{ number_format($sale['tax'], 0) }}% (Rs {{ number_format($sale['tax_amount'], 2) }})
+        @else
+            Rs {{ number_format($sale['tax_amount'], 2) }}
+        @endif
+    </strong>
+</div>
+
                                 <div class="summary-item">
                                     <span>Grand Total:</span>
                                     <strong>Rs {{ number_format($sale['grand_total'], 2) }}</strong>

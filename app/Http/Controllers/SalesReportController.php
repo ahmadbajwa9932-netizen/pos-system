@@ -36,14 +36,24 @@ class SalesReportController extends Controller
         ));
     }
 
+    // helper METHOD
+private function parseDateRange(Request $request)
+{
+    $dateRange = $request->date_range ?? 'this_month';
+    $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : null;
+    $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : null;
+
+    return $this->getDateRange($dateRange, $startDate, $endDate);
+}
+
     // 1. DATE RANGE SALES REPORT WITH COMPARISON
     public function dateRangeSales(Request $request)
     {
-        $dateRange = $request->date_range ?? 'this_month';
-        $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : null;
-        $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : null;
-
-        [$startDate, $endDate] = $this->getDateRange($dateRange, $startDate, $endDate);
+         // FIXED: Provide defaults if missing
+    $dateRange = $request->date_range ?? 'this_month';
+    $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : Carbon::now()->startOfMonth();
+    $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : Carbon::now()->endOfMonth();
+    [$startDate, $endDate] = $this->getDateRange($dateRange, $startDate, $endDate);
 
         // Current period data
         $currentData = $this->getPeriodSalesData($startDate, $endDate);
@@ -76,8 +86,7 @@ class SalesReportController extends Controller
     // 2. PRODUCT-WISE SALES REPORT (UPDATED WITH RETURNS)
 public function productWiseSales(Request $request)
 {
-    $startDate = Carbon::parse($request->start_date)->startOfDay();
-    $endDate = Carbon::parse($request->end_date)->endOfDay();
+    [$startDate, $endDate] = $this->parseDateRange($request);
     $sortBy = $request->sort_by ?? 'revenue';
     $sortOrder = $request->sort_order ?? 'desc';
 
@@ -200,8 +209,7 @@ public function productWiseSales(Request $request)
     // 3. CATEGORY-WISE SALES REPORT (CORRECTED)
     public function categoryWiseSales(Request $request)
     {
-        $startDate = Carbon::parse($request->start_date)->startOfDay();
-        $endDate = Carbon::parse($request->end_date)->endOfDay();
+        [$startDate, $endDate] = $this->parseDateRange($request);
 
         $categories = collect();
         $sales = Sale::whereBetween('created_at', [$startDate, $endDate])->get();
@@ -277,16 +285,24 @@ public function productWiseSales(Request $request)
             }
         }
 
-        // Count transactions per category
-        foreach ($categories as $categoryName => $data) {
-            $transactionCount = DB::table('sale_items')
-                ->join('purchases', 'sale_items.purchase_id', '=', 'purchases.id')
-                ->join('categories', 'purchases.category_id', '=', 'categories.id')
-                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
-                ->where('categories.name', $categoryName)
-                ->whereBetween('sales.created_at', [$startDate, $endDate])
-                ->distinct('sales.id')
-                ->count('sales.id');
+        // Count transactions per category (excluding fully returned)
+foreach ($categories as $categoryName => $data) {
+    $transactionCount = DB::table('sale_items')
+        ->join('purchases', 'sale_items.purchase_id', '=', 'purchases.id')
+        ->join('categories', 'purchases.category_id', '=', 'categories.id')
+        ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+        ->leftJoin(DB::raw('(
+            SELECT sale_item_id, 
+                   SUM(quantity_returned) as total_returned
+            FROM sale_return_items 
+            WHERE created_at BETWEEN "' . $startDate . '" AND "' . $endDate . '"
+            GROUP BY sale_item_id
+        ) as returns'), 'sale_items.id', '=', 'returns.sale_item_id')
+        ->where('categories.name', $categoryName)
+        ->whereBetween('sales.created_at', [$startDate, $endDate])
+        ->whereRaw('sale_items.quantity > COALESCE(returns.total_returned, 0)') // ✅ Exclude fully returned
+        ->distinct('sales.id')
+        ->count('sales.id');
 
             $data['transactions'] = $transactionCount;
             $data['profit_margin'] = $data['revenue'] > 0 ? ($data['profit'] / $data['revenue']) * 100 : 0;
@@ -298,8 +314,7 @@ public function productWiseSales(Request $request)
 
     public function transactionLog(Request $request)
 {
-    $startDate = Carbon::parse($request->start_date)->startOfDay();
-    $endDate = Carbon::parse($request->end_date)->endOfDay();
+    [$startDate, $endDate] = $this->parseDateRange($request);
     $paymentType = $request->payment_type;
     $customerId = $request->customer_id;
     $perPage = $request->per_page ?? 20;
@@ -381,8 +396,7 @@ public function productWiseSales(Request $request)
 
 public function salesTaxReport(Request $request)
 {
-    $startDate = Carbon::parse($request->start_date)->startOfDay();
-    $endDate = Carbon::parse($request->end_date)->endOfDay();
+    [$startDate, $endDate] = $this->parseDateRange($request);
     $groupBy = $request->group_by ?? 'daily';
 
     $taxData = collect();
@@ -390,8 +404,8 @@ public function salesTaxReport(Request $request)
     if ($groupBy === 'daily') {
         $sales = Sale::select(
             DB::raw('DATE(created_at) as date'),
-            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN (grand_total - tax) ELSE 0 END) as taxable_amount'),
-            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN tax ELSE 0 END) as tax_collected')
+            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN (grand_total - tax_amount) ELSE 0 END) as taxable_amount'),
+            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN tax_amount ELSE 0 END) as tax_collected')
         )
         ->whereBetween('created_at', [$startDate, $endDate])
         ->groupBy('date')
@@ -417,8 +431,8 @@ public function salesTaxReport(Request $request)
                 $paidRatio = $creditSale->grand_total > 0 
                     ? ($creditSale->grand_total - $creditSale->remaining_balance) / $creditSale->grand_total 
                     : 0;
-                $paidTaxableAmount += ($creditSale->grand_total - $creditSale->tax) * $paidRatio;
-                $paidTaxAmount += $creditSale->tax * $paidRatio;
+                    $paidTaxableAmount += ($creditSale->grand_total - $creditSale->tax_amount) * $paidRatio;
+                    $paidTaxAmount += $creditSale->tax_amount * $paidRatio;
             }
 
             $existingRecord = $sales->firstWhere('date', $dateGroup->date);
@@ -455,11 +469,11 @@ public function salesTaxReport(Request $request)
             // Calculate what portion of subtotal was returned
             $returnRatio = $sale->subtotal > 0 ? ($baseReturnAmount / $sale->subtotal) : 0;
             
-            // Calculate refunded tax (proportional to return ratio)
-            $refundedTax = $sale->tax * $returnRatio;
-            
-            // Refunded taxable amount (total return minus the tax portion)
-            $refundedTaxable = $return->total_return_amount - $refundedTax;
+         // Calculate refunded tax (proportional to return ratio)
+$refundedTax = $sale->tax_amount * $returnRatio;
+
+// Refunded taxable amount (total return minus the tax portion)
+$refundedTaxable = $return->total_return_amount - $refundedTax;
 
             $record = $sales->firstWhere('date', $saleDate);
             if ($record) {
@@ -474,8 +488,8 @@ public function salesTaxReport(Request $request)
         // === MONTHLY GROUPING ===
         $sales = Sale::select(
             DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
-            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN (grand_total - tax) ELSE 0 END) as taxable_amount'),
-            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN tax ELSE 0 END) as tax_collected')
+            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN (grand_total - tax_amount) ELSE 0 END) as taxable_amount'),
+            DB::raw('SUM(CASE WHEN payment_type != "credit" THEN tax_amount ELSE 0 END) as tax_collected')
         )
         ->whereBetween('created_at', [$startDate, $endDate])
         ->groupBy('month')
@@ -500,8 +514,8 @@ public function salesTaxReport(Request $request)
                 $paidRatio = $creditSale->grand_total > 0 
                     ? ($creditSale->grand_total - $creditSale->remaining_balance) / $creditSale->grand_total 
                     : 0;
-                $paidTaxableAmount += ($creditSale->grand_total - $creditSale->tax) * $paidRatio;
-                $paidTaxAmount += $creditSale->tax * $paidRatio;
+                    $paidTaxableAmount += ($creditSale->grand_total - $creditSale->tax_amount) * $paidRatio;
+                    $paidTaxAmount += $creditSale->tax_amount * $paidRatio;
             }
 
             $existingRecord = $sales->firstWhere('month', $monthGroup->month);
@@ -537,11 +551,11 @@ public function salesTaxReport(Request $request)
             // Calculate what portion of subtotal was returned
             $returnRatio = $sale->subtotal > 0 ? ($baseReturnAmount / $sale->subtotal) : 0;
             
-            // Calculate refunded tax
-            $refundedTax = $sale->tax * $returnRatio;
-            
-            // Refunded taxable amount
-            $refundedTaxable = $return->total_return_amount - $refundedTax;
+           // Calculate refunded tax
+$refundedTax = $sale->tax_amount * $returnRatio;
+
+// Refunded taxable amount
+$refundedTaxable = $return->total_return_amount - $refundedTax;
 
             $record = $sales->firstWhere('month', $saleMonth);
             if ($record) {
@@ -576,8 +590,7 @@ public function salesTaxReport(Request $request)
 
 public function timeBasedAnalysis(Request $request)
 {
-    $startDate = Carbon::parse($request->start_date)->startOfDay();
-    $endDate = Carbon::parse($request->end_date)->endOfDay();
+    [$startDate, $endDate] = $this->parseDateRange($request);
     $analysisType = $request->analysis_type ?? 'hourly';
 
     $timeData = collect();
@@ -631,6 +644,7 @@ public function timeBasedAnalysis(Request $request)
                 $timeData->push([
                     'hour' => $hour,
                     'time_label' => date('h A', strtotime($hourStart)),
+                    'day_label' => date('D, d M', strtotime($startDate)),
                     'revenue' => $revenue,
                     'transactions' => $transactions,
                     'avg_transaction_value' => $transactions > 0 ? $revenue / $transactions : 0
@@ -748,7 +762,28 @@ public function timeBasedAnalysis(Request $request)
 
     // Find peak times
     $peakRevenue = $timeData->sortByDesc('revenue')->first();
-    $peakTransactions = $timeData->sortByDesc('transactions')->first();
+$peakTransactions = $timeData->sortByDesc('transactions')->first();
+
+// Handle empty results
+if (!$peakRevenue) {
+    $peakRevenue = [
+        'time_label' => 'N/A',
+        'day_name' => 'N/A',
+        'week_label' => 'N/A',
+        'revenue' => 0,
+        'transactions' => 0
+    ];
+}
+
+if (!$peakTransactions) {
+    $peakTransactions = [
+        'time_label' => 'N/A',
+        'day_name' => 'N/A',
+        'week_label' => 'N/A',
+        'revenue' => 0,
+        'transactions' => 0
+    ];
+}
 
     return response()->json([
         'data' => $timeData->values(),

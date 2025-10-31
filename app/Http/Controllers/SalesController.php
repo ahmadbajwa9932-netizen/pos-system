@@ -130,6 +130,7 @@ private function calculatePaymentDistribution($grandTotal, $currentBalance, $rec
         'discount' => 'nullable|numeric|min:0',
         'discount_type' => 'nullable|in:amount,percentage',
         'tax' => 'nullable|numeric|min:0',
+        'tax_type' => 'nullable|in:amount,percentage',
         'grand_total' => 'required|numeric|min:0',
         'received_amount' => 'nullable|numeric|min:0',
         'change_amount' => 'nullable|numeric|min:0',
@@ -271,7 +272,7 @@ return [
             $today = now()->format('Ymd');
 
 // Try to get today's counter
-$counter = \App\Models\InvoiceCounter::firstOrCreate(
+$counter = InvoiceCounter::firstOrCreate(
     ['date' => $today],
     ['last_number' => 0]
 );
@@ -307,25 +308,46 @@ $voucherNo = 'INV-' . $today . '-' . $counter->last_number;
             } else {
                 // 3️⃣ If found, update details when info differs
                 $updates = [];
-
-                if (!empty($request->customer_name) && trim(strtolower($request->customer_name)) !== trim(strtolower($customer->name))) {
+            
+                // Normalize for comparison
+                $newName = !empty($request->customer_name) ? trim(strtolower($request->customer_name)) : '';
+                $newShop = !empty($request->shop_name) ? trim(strtolower($request->shop_name)) : '';
+                $newCity = !empty($request->city) ? trim(strtolower($request->city)) : '';
+                $newContact = !empty($request->contact) ? trim($request->contact) : '';
+            
+                $oldName = !empty($customer->name) ? trim(strtolower($customer->name)) : '';
+                $oldShop = !empty($customer->shop_name) ? trim(strtolower($customer->shop_name)) : '';
+                $oldCity = !empty($customer->city) ? trim(strtolower($customer->city)) : '';
+                $oldContact = !empty($customer->contact) ? trim($customer->contact) : '';
+            
+                // Update name if: (1) new value provided AND (2) either different OR old is empty/Walk-in
+                if (!empty($request->customer_name) && 
+                    ($newName !== $oldName || $oldName === 'walk-in customer' || empty($customer->name))) {
                     $updates['name'] = trim($request->customer_name);
                 }
-                if (!empty($request->shop_name) && trim(strtolower($request->shop_name)) !== trim(strtolower($customer->shop_name))) {
+            
+                // Update shop name if: (1) new value provided AND (2) either different OR old is empty
+                if (!empty($request->shop_name) && 
+                    ($newShop !== $oldShop || empty($customer->shop_name))) {
                     $updates['shop_name'] = trim($request->shop_name);
                 }
-                if (!empty($request->city) && trim(strtolower($request->city)) !== trim(strtolower($customer->city))) {
+            
+                // Update city if: (1) new value provided AND (2) either different OR old is empty
+                if (!empty($request->city) && 
+                    ($newCity !== $oldCity || empty($customer->city))) {
                     $updates['city'] = trim($request->city);
                 }
-                if (!empty($request->contact) && trim($request->contact) !== trim($customer->contact)) {
+            
+                // Update contact if provided and different
+                if (!empty($request->contact) && $newContact !== $oldContact) {
                     $updates['contact'] = trim($request->contact);
                 }
-
+            
                 // Upgrade permanently if customer buys on credit
                 if ($customer->customer_type !== 'credit' && $request->payment_type === 'credit') {
                     $updates['customer_type'] = 'credit';
                 }
-
+            
                 if (!empty($updates)) {
                     $customer->update($updates);
                 }
@@ -337,6 +359,13 @@ $voucherNo = 'INV-' . $today . '-' . $counter->last_number;
             if ($discountType === 'percentage') {
                 $discountAmount = ($request->subtotal * $request->discount) / 100;
             }
+
+            // Calculate tax amount
+$taxType = $request->tax_type ?? 'amount';
+$taxAmount = $request->tax ?? 0;
+if ($taxType === 'percentage') {
+    $taxAmount = ($request->subtotal * $request->tax) / 100;
+}
 
             // ✅ Get customer's current balance
             $received = $request->received_amount ?? 0;
@@ -386,7 +415,9 @@ if ($status === 'paid' && $request->payment_type !== 'credit' && $salePayment > 
                 'discount_type' => $discountType,
                 'discount' => $request->discount ?? 0,
                 'discount_amount' => $discountAmount,
+                'tax_type' => $taxType,
                 'tax' => $request->tax ?? 0,
+                'tax_amount' => $taxAmount,
                 'grand_total' => $request->grand_total,
                 'received_amount' => $received,
                 'change_amount' => $request->change_amount ?? 0,
@@ -752,8 +783,15 @@ public function showDetails($voucher_no)
     // ✅ FIXED: Calculate adjusted values based on the proportion of grand total returned
     $adjustedSubtotal = $sale->subtotal * (1 - $returnPercentage);
     $adjustedDiscountAmount = $sale->discount_amount * (1 - $returnPercentage);
-    $adjustedTax = ($sale->tax ?? 0) * (1 - $returnPercentage);
-    $adjustedGrandTotal = $sale->grand_total - $totalReturnedAmount;
+// Calculate adjusted tax based on tax type
+$adjustedTax = 0;
+if ($sale->tax_type === 'percentage') {
+    // For percentage tax, recalculate on adjusted subtotal
+    $adjustedTax = ($adjustedSubtotal * ($sale->tax ?? 0)) / 100;
+} else {
+    // For amount tax, reduce proportionally
+    $adjustedTax = ($sale->tax_amount ?? $sale->tax ?? 0) * (1 - $returnPercentage);
+}    $adjustedGrandTotal = $sale->grand_total - $totalReturnedAmount;
     
     // ✅ FIXED: Get original sale items with return information (same as SaleReturnController)
     $originalSaleItems = DB::table('sale_items')
@@ -1132,8 +1170,16 @@ $newSubtotal = $remainingSaleItems->sum('total_after_discount'); // ✅ Changed 
             }
 
             // Calculate new grand total
-            $newGrandTotal = $newSubtotal - $newSaleDiscountAmount + $sale->tax;
-            
+// Calculate new tax amount proportionally
+$newTaxAmount = 0;
+if ($sale->tax_type === 'percentage' && $sale->tax > 0) {
+    $newTaxAmount = ($newSubtotal * $sale->tax) / 100;
+} elseif ($sale->tax_type === 'amount') {
+    $newTaxAmount = min($sale->tax, $newSubtotal);
+}
+
+// Calculate new grand total
+$newGrandTotal = $newSubtotal - $newSaleDiscountAmount + $newTaxAmount;            
             $paidAmount = $sale->grand_total - $oldRemainingBalance;
             $newRemainingBalance = max(0, $newGrandTotal - $paidAmount);
 
@@ -1141,6 +1187,7 @@ $newSubtotal = $remainingSaleItems->sum('total_after_discount'); // ✅ Changed 
             $sale->update([
                 'subtotal' => $newSubtotal,
                 'discount_amount' => $newSaleDiscountAmount,
+                'tax_amount' => $newTaxAmount,  // ADD THIS
                 'grand_total' => $newGrandTotal,
                 'remaining_balance' => $newRemainingBalance
             ]);
@@ -1245,8 +1292,16 @@ if ($sale->discount_type === 'percentage' && $sale->discount > 0) {
 }
 
 // Calculate new grand total
-$newGrandTotal = $newSubtotal - $newSaleDiscountAmount + $sale->tax;
+// Calculate new tax amount proportionally
+$newTaxAmount = 0;
+if ($sale->tax_type === 'percentage' && $sale->tax > 0) {
+    $newTaxAmount = ($newSubtotal * $sale->tax) / 100;
+} elseif ($sale->tax_type === 'amount') {
+    $newTaxAmount = min($sale->tax, $newSubtotal);
+}
 
+// Calculate new grand total
+$newGrandTotal = $newSubtotal - $newSaleDiscountAmount + $newTaxAmount;
 $paidAmount = $sale->grand_total - $oldRemainingBalance;
 $newRemainingBalance = max(0, $newGrandTotal - $paidAmount);
 
@@ -1254,6 +1309,7 @@ $newRemainingBalance = max(0, $newGrandTotal - $paidAmount);
 $sale->update([
     'subtotal' => $newSubtotal, // This will now be 14,500 instead of 15,000
     'discount_amount' => $newSaleDiscountAmount,
+    'tax_amount' => $newTaxAmount,  // ADD THIS
     'grand_total' => $newGrandTotal,
     'remaining_balance' => $newRemainingBalance
 ]);

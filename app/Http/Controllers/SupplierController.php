@@ -9,31 +9,76 @@ class SupplierController extends Controller
 {
     public function index()
     {
-        $suppliers = Supplier::withCount('purchases')
-            ->with(['purchases' => function ($query) {
-                $query->select('supplier_id', 'purchased_price', 'quantity');
-            }])
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-    
-        // Calculate total purchase amount manually
-        foreach ($suppliers as $supplier) {
-            $supplier->total_purchase_amount = $supplier->purchases->sum(function ($purchase) {
-                return $purchase->purchased_price * $purchase->quantity;
-            });
-        }
-    
-        return view('pages.purchase.supply', compact('suppliers'));
+        return view('pages.purchase.supply');
     }
-    
 
+    // NEW METHOD - Add after index()
+public function getData(Request $request)
+{
+    $page = $request->get('page', 1);
+    
+    $suppliers = Supplier::withCount('purchases')
+        ->with(['purchases' => function ($query) {
+            $query->select('supplier_id', 'purchased_price', 'quantity');
+        }])
+        ->orderBy('created_at', 'desc')
+        ->paginate(10);
+
+    // Calculate total purchase amount manually
+    foreach ($suppliers as $supplier) {
+        $supplier->total_purchase_amount = $supplier->purchases->sum(function ($purchase) {
+            return $purchase->purchased_price * $purchase->quantity;
+        });
+    }
+
+    if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+            'success' => true,
+            'data' => $suppliers->items(),
+            'pagination' => [
+                'current_page' => $suppliers->currentPage(),
+                'last_page' => $suppliers->lastPage(),
+                'per_page' => $suppliers->perPage(),
+                'total' => $suppliers->total(),
+                'first_item' => $suppliers->firstItem(),
+                'last_item' => $suppliers->lastItem(),
+                'has_more_pages' => $suppliers->hasMorePages(),
+                'on_first_page' => $suppliers->onFirstPage(),
+            ]
+        ]);
+    }
+}
+    
 public function show($id)
 {
     $supplier = Supplier::findOrFail($id);
+    return view('pages.purchase.supplier_products', compact('supplier'));
+}
+
+public function getSupplierPurchases(Request $request, $id)
+{
+    $supplier = Supplier::findOrFail($id);
+    $page = $request->get('page', 1);
+    
     $purchases = Purchase::where('supplier_id', $supplier->id)
         ->orderBy('purchase_date', 'desc')
-        ->paginate(10);
-    return view('pages.purchase.supplier_products', compact('supplier', 'purchases'));
+        ->simplePaginate(10);
+    
+    if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+            'success' => true,
+            'supplier' => $supplier,
+            'data' => $purchases->items(),
+            'pagination' => [
+                'current_page' => $purchases->currentPage(),
+                'per_page' => $purchases->perPage(),
+                'first_item' => ($purchases->currentPage() - 1) * $purchases->perPage() + 1,
+                'last_item' => ($purchases->currentPage() - 1) * $purchases->perPage() + count($purchases->items()),
+                'has_more_pages' => $purchases->hasMorePages(),
+                'on_first_page' => $purchases->onFirstPage(),
+            ]
+        ]);
+    }
 }
 
 

@@ -316,11 +316,11 @@ $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : 
             }
 
             if ($includeInRevenue) {
-                $saleTaxableAmount = ($sale->grand_total - $sale->tax) * $revenueRatio;
-                $saleTaxAmount = $sale->tax * $revenueRatio;
+                $saleTaxableAmount = ($sale->grand_total - $sale->tax_amount) * $revenueRatio;
+$saleTaxAmount = $sale->tax_amount * $revenueRatio;
 
-                $totalTaxableAmount += $saleTaxableAmount;
-                $totalTaxCollected += $saleTaxAmount;
+$totalTaxableAmount += $saleTaxableAmount;
+$totalTaxCollected += $saleTaxAmount;
             }
         }
 
@@ -338,7 +338,7 @@ $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : 
             $baseReturnAmount = $actualPaymentRatio > 0 ? ($return->total_return_amount / $actualPaymentRatio) : 0;
             $returnRatio = $sale->subtotal > 0 ? ($baseReturnAmount / $sale->subtotal) : 0;
             
-            $refundedTax = $sale->tax * $returnRatio;
+            $refundedTax = $sale->tax_amount * $returnRatio;
             $refundedTaxable = $return->total_return_amount - $refundedTax;
 
             $totalTaxableAmount -= $refundedTaxable;

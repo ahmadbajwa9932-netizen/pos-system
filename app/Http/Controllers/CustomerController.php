@@ -11,14 +11,22 @@ class CustomerController extends Controller
     /**
      * Display the list of customers.
      */
-    public function index()
+    // Page loads instantly - NO database queries
+public function index()
 {
+    return view('pages.customer.customer');
+}
+    // AJAX endpoint - returns data only
+public function getData(Request $request)
+{
+    $page = $request->get('page', 1);
+    
     // Get all customers with sales count and payment type breakdown
     $customers = Customer::withCount(['sales' => function ($query) {
-        $query->whereNull('deleted_at'); // ✅ exclude soft-deleted sales
+        $query->whereNull('deleted_at');
     }])
         ->with(['sales' => function ($query) {
-            $query->whereNull('deleted_at')->latest(); // Get latest sale for last purchase date
+            $query->whereNull('deleted_at')->latest();
         }])
         ->orderBy('created_at', 'desc')
         ->paginate(10);
@@ -34,27 +42,74 @@ class CustomerController extends Controller
             ->get()
             ->keyBy('payment_type');
     }
-
+    
+    // Return JSON for AJAX
+    if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+            'success' => true,
+            'data' => $customers->items(),
+            'salesBreakdown' => $salesBreakdown,
+            'pagination' => [
+                'current_page' => $customers->currentPage(),
+                'last_page' => $customers->lastPage(),
+                'per_page' => $customers->perPage(),
+                'total' => $customers->total(),
+                'first_item' => $customers->firstItem(),
+                'last_item' => $customers->lastItem(),
+                'has_more_pages' => $customers->hasMorePages(),
+                'on_first_page' => $customers->onFirstPage(),
+            ]
+        ]);
+    }
+    
+    // Fallback for non-AJAX requests
     return view('pages.customer.customer', compact('customers', 'salesBreakdown'));
 }
 
-    public function creditCustomerindex()
+// Page loads instantly - NO database queries
+public function creditCustomerindex()
 {
+    return view('pages.customer.creditCustomer');
+}
+
+   // AJAX endpoint for credit customers
+public function getCreditData(Request $request)
+{
+    $page = $request->get('page', 1);
+    
     $customers = Customer::withCount(['sales as credit_sales_count' => function ($query) {
         $query->where('payment_type', 'credit');
     }])
     ->with(['sales' => function ($query) {
         $query->where('payment_type', 'credit')->latest();
     }])
-    ->has('sales', '>=', 1) // ✅ Must have at least 1 sale
+    ->has('sales', '>=', 1)
     ->whereHas('sales', function ($query) {
-        $query->where('payment_type', 'credit'); // ✅ At least 1 credit sale
+        $query->where('payment_type', 'credit');
     })
     ->orderBy('created_at', 'desc')
     ->paginate(10);
+    
+    // Return JSON for AJAX
+    if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+            'success' => true,
+            'data' => $customers->items(),
+            'pagination' => [
+                'current_page' => $customers->currentPage(),
+                'last_page' => $customers->lastPage(),
+                'per_page' => $customers->perPage(),
+                'total' => $customers->total(),
+                'first_item' => $customers->firstItem(),
+                'last_item' => $customers->lastItem(),
+                'has_more_pages' => $customers->hasMorePages(),
+                'on_first_page' => $customers->onFirstPage(),
+            ]
+        ]);
+    }
+    
     return view('pages.customer.creditCustomer', compact('customers'));
 }
-
 
     /**
      * Check for duplicate customer before creating
@@ -78,76 +133,82 @@ class CustomerController extends Controller
         return response()->json(['duplicate' => false]);
     }
 
-    /**
-     * Find existing customer or create new one
-     */
-    public function findOrCreateCustomer($customerData)
-    {
-        // ✅ Step 1: Try to find by contact (most reliable field)
-        $existingCustomer = null;
-        if (!empty($customerData['contact'])) {
-            $existingCustomer = Customer::where('contact', $customerData['contact'])->first();
-        }
+/**
+ * Find existing customer or create new one
+ */
+public function findOrCreateCustomer($customerData)
+{
+    // ✅ Step 1: Try to find by contact (most reliable field)
+    $existingCustomer = null;
+    if (!empty($customerData['contact'])) {
+        $existingCustomer = Customer::where('contact', $customerData['contact'])->first();
+    }
 
-        if (!$existingCustomer && !empty($customerData['shop_name'])) {
-            $existingCustomer = Customer::where('shop_name', $customerData['shop_name'])->first();
-        }
-    
-        // ✅ Step 2: If found, check for updates (name/shop/city changes or credit upgrade)
-        if ($existingCustomer) {
-            $updates = [];
-    
-            // Normalize all values (trim + lowercase for comparison)
-            $newName = isset($customerData['name']) ? trim(strtolower($customerData['name'])) : '';
-            $newShop = isset($customerData['shop_name']) ? trim(strtolower($customerData['shop_name'])) : '';
-            $newCity = isset($customerData['city']) ? trim(strtolower($customerData['city'])) : '';
-            $newContact = isset($customerData['contact']) ? trim($customerData['contact']) : '';
+    if (!$existingCustomer && !empty($customerData['shop_name'])) {
+        $existingCustomer = Customer::where('shop_name', $customerData['shop_name'])->first();
+    }
 
-            $oldName = trim(strtolower($existingCustomer->name ?? ''));
-            $oldShop = trim(strtolower($existingCustomer->shop_name ?? ''));
-            $oldCity = trim(strtolower($existingCustomer->city ?? ''));
-            $oldContact = trim($existingCustomer->contact ?? '');
+    // ✅ Step 2: If found, check for updates (name/shop/city changes or credit upgrade)
+if ($existingCustomer) {
+    $updates = [];
 
-    
-            // Update if changed and new value not empty
-            if (!empty($newName) && $newName !== $oldName) {
-                $updates['name'] = trim($customerData['name']);
-            }
-            if (!empty($newShop) && $newShop !== $oldShop) {
-                $updates['shop_name'] = trim($customerData['shop_name']);
-            }
-            if (!empty($newCity) && $newCity !== $oldCity) {
-                $updates['city'] = trim($customerData['city']);
-            }
-            // ✅ NEW: Update contact if it changed (customer changed phone number)
-        if (!empty($newContact) && $newContact !== $oldContact) {
-            $updates['contact'] = trim($customerData['contact']);
-        }
+    // Normalize all values (trim + lowercase for comparison)
+    $newName = isset($customerData['name']) ? trim(strtolower($customerData['name'])) : '';
+    $newShop = isset($customerData['shop_name']) ? trim(strtolower($customerData['shop_name'])) : '';
+    $newCity = isset($customerData['city']) ? trim(strtolower($customerData['city'])) : '';
+    $newContact = isset($customerData['contact']) ? trim($customerData['contact']) : '';
 
+    $oldName = !empty($existingCustomer->name) ? trim(strtolower($existingCustomer->name)) : '';
+    $oldShop = !empty($existingCustomer->shop_name) ? trim(strtolower($existingCustomer->shop_name)) : '';
+    $oldCity = !empty($existingCustomer->city) ? trim(strtolower($existingCustomer->city)) : '';
+    $oldContact = !empty($existingCustomer->contact) ? trim($existingCustomer->contact) : '';
+
+    // ✅ Update name if: (1) new value provided AND (2) either different OR old is empty/Walk-in
+    if (!empty($newName) && 
+        ($newName !== $oldName || $oldName === 'walk-in customer' || empty($existingCustomer->name))) {
+        $updates['name'] = trim($customerData['name']);
+    }
     
-            // Upgrade permanently to credit if applicable
-            if ($existingCustomer->customer_type !== 'credit' && ($customerData['customer_type'] ?? '') === 'credit') {
-                $updates['customer_type'] = 'credit';
-            }
+    // ✅ Update shop name if: (1) new value provided AND (2) either different OR old is empty
+    if (!empty($newShop) && 
+        ($newShop !== $oldShop || empty($existingCustomer->shop_name))) {
+        $updates['shop_name'] = trim($customerData['shop_name']);
+    }
     
-            // Apply updates if needed
-            if (!empty($updates)) {
-                $existingCustomer->update($updates);
-            }
+    // ✅ Update city if: (1) new value provided AND (2) either different OR old is empty
+    if (!empty($newCity) && 
+        ($newCity !== $oldCity || empty($existingCustomer->city))) {
+        $updates['city'] = trim($customerData['city']);
+    }
     
-            return $existingCustomer;
-        }
-    
-        // ✅ Step 3: Create new if not found
-        return Customer::create([
-            'name' => trim($customerData['name'] ?? 'Walk-in Customer'),
-            'shop_name' => trim($customerData['shop_name'] ?? ''),
-            'city' => trim($customerData['city'] ?? ''),
-            'contact' => trim($customerData['contact'] ?? ''),
-            'customer_type' => $customerData['customer_type'] ?? 'cash',
-            'current_balance' => 0
-        ]);
-    }    
+    // ✅ Update contact if it changed (customer changed phone number)
+    if (!empty($newContact) && $newContact !== $oldContact) {
+        $updates['contact'] = trim($customerData['contact']);
+    }
+
+    // Upgrade permanently to credit if applicable
+    if ($existingCustomer->customer_type !== 'credit' && ($customerData['customer_type'] ?? '') === 'credit') {
+        $updates['customer_type'] = 'credit';
+    }
+
+    // Apply updates if needed
+    if (!empty($updates)) {
+        $existingCustomer->update($updates);
+    }
+
+    return $existingCustomer;
+}
+
+    // ✅ Step 3: Create new if not found
+    return Customer::create([
+        'name' => trim($customerData['name'] ?? 'Walk-in Customer'),
+        'shop_name' => trim($customerData['shop_name'] ?? ''),
+        'city' => trim($customerData['city'] ?? ''),
+        'contact' => trim($customerData['contact'] ?? ''),
+        'customer_type' => $customerData['customer_type'] ?? 'cash',
+        'current_balance' => 0
+    ]);
+}
 
     /**
      * Delete a customer.
@@ -287,7 +348,9 @@ public function destroyCreditCustomer(Request $request, $id)
             'sales.discount_type',
             'sales.discount',
             'sales.discount_amount',
+            'sales.tax_type',
             'sales.tax',
+            'sales.tax_amount',
             'sales.grand_total',
             'sales.received_amount',
             'sales.remaining_balance',
@@ -339,9 +402,12 @@ public function destroyCreditCustomer(Request $request, $id)
             
             $adjustedSubtotal = $item->subtotal * (1 - $returnPercentage);
             $adjustedDiscountAmount = $item->discount_amount * (1 - $returnPercentage);
-            $adjustedTax = ($item->tax ?? 0) * (1 - $returnPercentage);
+            if ($item->tax_type === 'percentage') {
+                $adjustedTax = ($item->tax_amount ?? 0) * (1 - $returnPercentage);
+            } else {
+                $adjustedTax = ($item->tax ?? 0) * (1 - $returnPercentage);
+            }
             $adjustedGrandTotal = $item->grand_total - $totalReturnedAmount;
-            
             $groupedSales[$saleId] = [
                 'sale_info' => [
                     'voucher_no' => $item->voucher_no,
@@ -350,7 +416,9 @@ public function destroyCreditCustomer(Request $request, $id)
                     'discount_type' => $item->discount_type,
                     'discount' => $item->discount,
                     'discount_amount' => $item->discount_amount,
-                    'tax' => $item->tax,
+'tax_type' => $item->tax_type,
+'tax' => $item->tax, // keep actual input value (like 5%)
+'tax_amount' => $item->tax_amount, // computed amount in currency
                     'grand_total' => $item->grand_total,
                     'received_amount' => $item->received_amount,
                     'remaining_balance' => $item->remaining_balance,
@@ -446,7 +514,9 @@ public function showCreditPurchases($id)
             'sales.discount_type',
             'sales.discount',
             'sales.discount_amount',
+            'sales.tax_type',
             'sales.tax',
+            'sales.tax_amount',
             'sales.grand_total',
             'sales.received_amount',
             'sales.remaining_balance',
@@ -497,9 +567,12 @@ public function showCreditPurchases($id)
 
             $adjustedSubtotal = $item->subtotal * (1 - $returnPercentage);
             $adjustedDiscountAmount = $item->discount_amount * (1 - $returnPercentage);
-            $adjustedTax = ($item->tax ?? 0) * (1 - $returnPercentage);
+            if ($item->tax_type === 'percentage') {
+                $adjustedTax = ($item->tax_amount ?? 0) * (1 - $returnPercentage);
+            } else {
+                $adjustedTax = ($item->tax ?? 0) * (1 - $returnPercentage);
+            }
             $adjustedGrandTotal = $item->grand_total - $totalReturnedAmount;
-
             $groupedSales[$saleId] = [
                 'sale_info' => [
                     'voucher_no' => $item->voucher_no,
@@ -508,7 +581,9 @@ public function showCreditPurchases($id)
                     'discount_type' => $item->discount_type,
                     'discount' => $item->discount,
                     'discount_amount' => $item->discount_amount,
-                    'tax' => $item->tax,
+'tax_type' => $item->tax_type,
+'tax' => $item->tax, // keep actual input value (like 5%)
+'tax_amount' => $item->tax_amount, // computed amount in currency
                     'grand_total' => $item->grand_total,
                     'received_amount' => $item->received_amount,
                     'remaining_balance' => $item->remaining_balance,

@@ -437,8 +437,14 @@ public function showPartialReturn($saleId)
         // Calculate adjusted values based on the proportion of grand total returned
         $adjustedSubtotal = $sale->subtotal * (1 - $returnPercentage);
         $adjustedDiscountAmount = $sale->discount_amount * (1 - $returnPercentage);
-        $adjustedTax = ($sale->tax ?? 0) * (1 - $returnPercentage);
-        
+// ✅ Calculate adjusted tax based on tax type
+if ($sale->tax_type === 'percentage') {
+    // For percentage tax, recalculate on adjusted subtotal
+    $adjustedTax = ($adjustedSubtotal * ($sale->tax ?? 0)) / 100;
+} else {
+    // For amount tax, reduce proportionally
+    $adjustedTax = ($sale->tax_amount ?? $sale->tax ?? 0) * (1 - $returnPercentage);
+}        
         // Add calculated fields to sale object
         $sale->has_returns = true;
         $sale->total_returned_amount = $totalReturnedAmount;

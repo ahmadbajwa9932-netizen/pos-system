@@ -1,0 +1,33 @@
+/* Eye toggle styles (safe, no conflict) */
+.toggle-visibility {
+    cursor: pointer;
+    margin-left: 6px;
+    vertical-align: middle;
+    outline: none;
+}
+
+/* Default: eye open visible, slash hidden */
+.toggle-visibility .eye-open {
+    display: inline;
+}
+
+.toggle-visibility .eye-closed {
+    display: none;
+    pointer-events: none;
+}
+
+/* When showing values → show slash overlay */
+.toggle-visibility.visibility-slash-active .eye-closed {
+    display: inline;
+}
+
+/* Ensure eye-open NEVER disappears */
+.toggle-visibility.visibility-slash-active .eye-open {
+    display: inline;
+}
+
+/* Optional better stroke */
+.toggle-visibility .eye-closed {
+    stroke-width: 2.2;
+    stroke-linecap: round;
+}

@@ -3,6 +3,7 @@
 @push('styles')
 <link rel="stylesheet" href="{{asset('css/components/container.css')}}">
 <link rel="stylesheet" href="{{ asset('css/reports/financialReport.css') }}">
+<link rel="stylesheet" href="{{ asset('css/reports/toggle_eye.css') }}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 @endpush
 
@@ -380,7 +381,7 @@
                                         <th class="text-right">Qty Sold</th>
                                         <th class="text-right">Revenue</th>
                                         <th class="text-right">Cost</th>
-                                        <th class="text-right">Profit</th>
+                                        <th class="text-right"><span style="color: #28a745">Profit</span> / <span style="color: #dc3545">Loss</span></th>
                                         <th class="text-right">Margin %</th>
                                     </tr>
                                 </thead>
@@ -411,7 +412,7 @@
                                         <th>Category</th>
                                         <th class="text-right">Revenue</th>
                                         <th class="text-right">Cost</th>
-                                        <th class="text-right">Profit</th>
+                                        <th class="text-right"><span style="color: #28a745">Profit</span> / <span style="color: #dc3545">Loss</span></th>
                                         <th class="text-right">Margin %</th>
                                         <th class="text-right">Contribution %</th>
                                     </tr>
@@ -522,7 +523,16 @@
 <script>
 let charts = {};
 let financialData = null;
-
+// Eye icon for toggle visibility
+const eyeIcon = `
+<svg class="toggle-visibility" onclick="toggleValue(this)" 
+    width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path class="eye-open" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+    <circle class="eye-open" cx="12" cy="12" r="3"></circle>
+    <path class="eye-closed" d="M3 3l18 18"></path>
+</svg>
+`;
 document.addEventListener('DOMContentLoaded', function() {
     const tabLinks = document.querySelectorAll('.tab-link');
     tabLinks.forEach(link => {
@@ -584,16 +594,27 @@ function loadFinancialReport() {
 }
 
 function displaySummaryTab(data) {
-    document.getElementById('summaryNetSales').textContent = formatCurrency(data.sales_revenue.net_sales_revenue);
+    const netSalesEl = document.getElementById('summaryNetSales');
+    netSalesEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.net_sales_revenue)}">****</span>`;
     document.getElementById('summaryGrossSales').textContent = 'Gross: ' + formatCurrency(data.sales_revenue.gross_sales);
-    document.getElementById('summaryCOGS').textContent = formatCurrency(data.cogs.total_cogs);
+    const cogsEl = document.getElementById('summaryCOGS');
+    cogsEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.cogs.total_cogs)}">****</span>`;
+    
     document.getElementById('summaryCOGSRatio').textContent = data.financial_ratios.cogs_ratio.toFixed(1) + '% of revenue';
-    document.getElementById('summaryGrossProfit').textContent = formatCurrency(data.gross_profit.amount);
+    
+    const grossProfitEl = document.getElementById('summaryGrossProfit');
+    grossProfitEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.gross_profit.amount)}">****</span>`;
     document.getElementById('summaryGrossProfitMargin').textContent = 'Margin: ' + data.gross_profit.margin_percentage.toFixed(1) + '%';
-    document.getElementById('summaryOperatingExpenses').textContent = formatCurrency(data.operating_expenses.total_expenses);
+    const opExpensesEl = document.getElementById('summaryOperatingExpenses');
+    opExpensesEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.operating_expenses.total_expenses)}">****</span>`;
+    
     document.getElementById('summaryExpenseRatio').textContent = data.financial_ratios.expense_ratio.toFixed(1) + '% of revenue';
-    document.getElementById('summaryOperatingProfit').textContent = formatCurrency(data.operating_profit);
-    document.getElementById('summaryNetProfit').textContent = formatCurrency(data.net_profit.amount);
+    
+    const opProfitEl = document.getElementById('summaryOperatingProfit');
+    opProfitEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.operating_profit)}">****</span>`;
+    
+    const netProfitEl = document.getElementById('summaryNetProfit');
+    netProfitEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.net_profit.amount)}">****</span>`;
     document.getElementById('summaryNetProfitMargin').textContent = 'Margin: ' + data.net_profit.margin_percentage.toFixed(1) + '%';
     
     document.getElementById('ratioGrossProfitMargin').textContent = data.financial_ratios.gross_profit_margin.toFixed(1) + '%';
@@ -613,29 +634,29 @@ function displayPLStatement(data) {
     const tbody = document.getElementById('plStatementBody');
     tbody.innerHTML = `
         <tr class="pl-section-header"><td colspan="2"><strong>REVENUE</strong></td></tr>
-        <tr><td class="pl-item-indent">Gross Sales</td><td class="text-right">${formatCurrency(data.sales_revenue.gross_sales)}</td></tr>
+        <tr><td class="pl-item-indent">Gross Sales</td><td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.gross_sales)}">****</span></td></tr>
         <tr><td class="pl-item-indent">Less: Discounts</td><td class="text-right text-danger">(${formatCurrency(data.sales_revenue.total_discounts)})</td></tr>
         <tr><td class="pl-item-indent">Less: Returns</td><td class="text-right text-danger">(${formatCurrency(data.sales_revenue.total_returns)})</td></tr>
-        <tr class="pl-subtotal"><td><strong>Net Sales Revenue</strong></td><td class="text-right"><strong>${formatCurrency(data.sales_revenue.net_sales_revenue)}</strong></td></tr>
+        <tr class="pl-subtotal"><td><strong>Net Sales Revenue</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.net_sales_revenue)}">****</span></strong></td></tr>
         <tr class="pl-spacer"><td colspan="2"></td></tr>
         <tr class="pl-section-header"><td colspan="2"><strong>COST OF GOODS SOLD</strong></td></tr>
-        <tr><td class="pl-item-indent">Total COGS</td><td class="text-right text-danger">(${formatCurrency(data.cogs.total_cogs)})</td></tr>
-        <tr class="pl-subtotal"><td><strong>Gross Profit</strong></td><td class="text-right"><strong>${formatCurrency(data.gross_profit.amount)}</strong></td></tr>
+        <tr><td class="pl-item-indent">Total COGS</td><td class="text-right text-danger">(${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.cogs.total_cogs)}">****</span>)</td></tr>
+        <tr class="pl-subtotal"><td><strong>Gross Profit</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.gross_profit.amount)}">****</span></strong></td></tr>
         <tr class="pl-spacer"><td colspan="2"></td></tr>
         <tr class="pl-section-header"><td colspan="2"><strong>OPERATING EXPENSES</strong></td></tr>
-        <tr><td class="pl-item-indent">Total Operating Expenses</td><td class="text-right text-danger">(${formatCurrency(data.operating_expenses.total_expenses)})</td></tr>
-        <tr class="pl-subtotal"><td><strong>Operating Profit (EBIT)</strong></td><td class="text-right"><strong>${formatCurrency(data.operating_profit)}</strong></td></tr>
-        <tr class="pl-spacer"><td colspan="2"></td></tr>
+        <tr><td class="pl-item-indent">Total Operating Expenses</td><td class="text-right text-danger">(${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.operating_expenses.total_expenses)}">****</span>)</td></tr>
+        <tr class="pl-subtotal"><td><strong>Operating Profit (EBIT)</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.operating_profit)}">****</span></strong></td></tr>
+ <tr class="pl-spacer"><td colspan="2"></td></tr>
         <tr class="pl-section-header"><td colspan="2"><strong>TAX</strong></td></tr>
-        <tr><td class="pl-item-indent">Tax Collected</td><td class="text-right">${formatCurrency(data.tax_info.total_tax_collected)}</td></tr>
+        <tr><td class="pl-item-indent">Tax Collected</td><td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.tax_info.total_tax_collected)}">****</span></td></tr>
         <tr class="pl-spacer"><td colspan="2"></td></tr>
-        <tr class="pl-total"><td><strong>NET PROFIT</strong></td><td class="text-right"><strong>${formatCurrency(data.net_profit.amount)}</strong></td></tr>
+        <tr class="pl-total"><td><strong>NET PROFIT</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.net_profit.amount)}">****</span></strong></td></tr>
     `;
 }
 
 function displayRevenueTab(data) {
-    document.getElementById('revenueGrossSales').textContent = formatCurrency(data.sales_revenue.gross_sales);
-    document.getElementById('revenueSalesCount').textContent = data.sales_revenue.sales_count + ' transactions';
+    const grossSalesEl = document.getElementById('revenueGrossSales');
+    grossSalesEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.gross_sales)}">****</span>`;    document.getElementById('revenueSalesCount').textContent = data.sales_revenue.sales_count + ' transactions';
     document.getElementById('revenueTotalDiscounts').textContent = formatCurrency(data.sales_revenue.total_discounts);
     document.getElementById('revenueTotalReturns').textContent = formatCurrency(data.sales_revenue.total_returns);
     
@@ -650,24 +671,26 @@ function displayRevenueTab(data) {
     
     const revenueBody = document.getElementById('revenueDetailsBody');
     revenueBody.innerHTML = `
-        <tr><td><strong>Gross Sales Revenue</strong></td><td class="text-right"><strong>${formatCurrency(data.sales_revenue.gross_sales)}</strong></td></tr>
+        <tr><td><strong>Gross Sales Revenue</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.gross_sales)}">****</span></strong></td></tr>
         <tr><td>Total Sales Count</td><td class="text-right">${data.sales_revenue.sales_count}</td></tr>
         <tr><td>Total Items Sold</td><td class="text-right">${parseFloat(data.sales_revenue.items_sold).toFixed(2)}</td></tr>
-        <tr><td>Average Transaction Value</td><td class="text-right">${formatCurrency(data.sales_revenue.avg_transaction_value)}</td></tr>
+        <tr><td>Average Transaction Value</td><td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.avg_transaction_value)}">****</span></td></tr>
         <tr class="table-divider"><td colspan="2"></td></tr>
         <tr><td>Total Discounts Given</td><td class="text-right text-danger">(${formatCurrency(data.sales_revenue.total_discounts)})</td></tr>
         <tr><td>Total Returns</td><td class="text-right text-danger">(${formatCurrency(data.sales_revenue.total_returns)})</td></tr>
         <tr class="table-divider"><td colspan="2"></td></tr>
-        <tr class="table-total"><td><strong>Net Sales Revenue</strong></td><td class="text-right"><strong>${formatCurrency(data.sales_revenue.net_sales_revenue)}</strong></td></tr>
+        <tr class="table-total"><td><strong>Net Sales Revenue</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.net_sales_revenue)}">****</span></strong></td></tr>
     `;
 }
 
 function displayExpensesTab(data) {
-    document.getElementById('expenseTotalAmount').textContent = formatCurrency(data.operating_expenses.total_expenses);
+    const expenseTotalEl = document.getElementById('expenseTotalAmount');
+    expenseTotalEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.operating_expenses.total_expenses)}">****</span>`;
     document.getElementById('expenseCount').textContent = data.operating_expenses.expense_count + ' expense records';
     
     const avgDaily = data.period.days > 0 ? data.operating_expenses.total_expenses / data.period.days : 0;
-    document.getElementById('expenseAvgDaily').textContent = formatCurrency(avgDaily);
+    const avgDailyEl = document.getElementById('expenseAvgDaily');
+    avgDailyEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(avgDaily)}">****</span>`;
     
     if (data.operating_expenses.breakdown.length > 0) {
         if (charts.expenseChart) charts.expenseChart.destroy();
@@ -739,9 +762,9 @@ function loadTopProducts() {
                     <td><strong>${product.product_name}</strong></td>
                     <td><span class="badge badge-secondary">${product.unit}</span></td>
                     <td class="text-right">${parseFloat(product.quantity_sold).toFixed(2)}</td>
-                    <td class="text-right">${formatCurrency(product.revenue)}</td>
-                    <td class="text-right">${formatCurrency(product.cost)}</td>
-                    <td class="text-right ${product.profit >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(product.profit)}</td>
+                    <td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(product.revenue)}">****</span></td>
+                    <td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(product.cost)}">****</span></td>
+                    <td class="text-right ${product.profit >= 0 ? 'text-success' : 'text-danger'}">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(product.profit)}">****</span></td>
                     <td class="text-right"><span class="badge ${product.profit_margin >= 0 ? 'badge-success' : 'badge-danger'}">${parseFloat(product.profit_margin).toFixed(1)}%</span></td>
                 </tr>
             `).join('');
@@ -790,9 +813,9 @@ function loadCategoryPerformance() {
                 <tr>
                     <td>${index + 1}</td>
                     <td><strong>${cat.category}</strong></td>
-                    <td class="text-right">${formatCurrency(cat.revenue)}</td>
-                    <td class="text-right">${formatCurrency(cat.cost)}</td>
-                    <td class="text-right ${cat.profit >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(cat.profit)}</td>
+                    <td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(cat.revenue)}">****</span></td>
+                    <td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(cat.cost)}">****</span></td>
+                    <td class="text-right ${cat.profit >= 0 ? 'text-success' : 'text-danger'}">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(cat.profit)}">****</span></td>
                     <td class="text-right"><span class="badge ${cat.profit_margin >= 0 ? 'badge-success' : 'badge-danger'}">${cat.profit_margin.toFixed(1)}%</span></td>
                     <td class="text-right">${cat.contribution_percentage.toFixed(1)}%</td>
                 </tr>
@@ -801,15 +824,18 @@ function loadCategoryPerformance() {
 }
 
 function displayBreakdownTab(data) {
-    document.getElementById('taxTaxableAmount').textContent = formatCurrency(data.tax_info.total_taxable_amount);
-    document.getElementById('taxCollected').textContent = formatCurrency(data.tax_info.total_tax_collected);
+    const taxableAmountEl = document.getElementById('taxTaxableAmount');
+    taxableAmountEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.tax_info.total_taxable_amount)}">****</span>`;
+    
+    const taxCollectedEl = document.getElementById('taxCollected');
+    taxCollectedEl.innerHTML = `${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.tax_info.total_tax_collected)}">****</span>`;
     document.getElementById('taxAvgRate').textContent = data.tax_info.avg_tax_rate.toFixed(2) + '%';
     
     document.getElementById('breakdownRevenueBody').innerHTML = `
-        <tr><td>Gross Sales</td><td class="text-right">${formatCurrency(data.sales_revenue.gross_sales)}</td></tr>
+        <tr><td>Gross Sales</td><td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.gross_sales)}">****</span></td></tr>
         <tr><td>Less: Discounts</td><td class="text-right text-danger">(${formatCurrency(data.sales_revenue.total_discounts)})</td></tr>
         <tr><td>Less: Returns</td><td class="text-right text-danger">(${formatCurrency(data.sales_revenue.total_returns)})</td></tr>
-        <tr class="table-total"><td><strong>Net Sales Revenue</strong></td><td class="text-right"><strong>${formatCurrency(data.sales_revenue.net_sales_revenue)}</strong></td></tr>
+        <tr class="table-total"><td><strong>Net Sales Revenue</strong></td><td class="text-right"><strong>${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.sales_revenue.net_sales_revenue)}">****</span></strong></td></tr>
     `;
     
     document.getElementById('breakdownCOGSBody').innerHTML = `
@@ -826,12 +852,12 @@ function displayBreakdownTab(data) {
     `;
     
     document.getElementById('breakdownProfitBody').innerHTML = `
-        <tr><td>Gross Profit</td><td class="text-right">${formatCurrency(data.gross_profit.amount)}</td></tr>
+        <tr><td>Gross Profit</td><td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.gross_profit.amount)}">****</span></td></tr>
         <tr><td>Gross Profit Margin</td><td class="text-right">${data.gross_profit.margin_percentage.toFixed(1)}%</td></tr>
-        <tr><td>Operating Profit (EBIT)</td><td class="text-right">${formatCurrency(data.operating_profit)}</td></tr>
+        <tr><td>Operating Profit (EBIT)</td><td class="text-right">${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.operating_profit)}">****</span></td></tr>
         <tr class="table-divider"><td colspan="2"></td></tr>
-        <tr class="table-total"><td><strong>Net Profit</strong></td><td class="text-right"><strong>${formatCurrency(data.net_profit.amount)}</strong></td></tr>
         <tr><td>Net Profit Margin</td><td class="text-right"><strong>${data.net_profit.margin_percentage.toFixed(1)}%</strong></td></tr>
+        <tr class="table-total"><td><strong>Net Profit</strong></td><td class="text-right"><strong> ${eyeIcon} <span class="secure-value" data-value="${formatCurrency(data.net_profit.amount)}">****</span></strong></td></tr>
     `;
 }
 
@@ -848,5 +874,5 @@ function printReport() {
     window.print();
 }
 </script>
-
+<script src="{{asset('js/salesReports/toggle_eye.js')}}"></script>
 @endsection

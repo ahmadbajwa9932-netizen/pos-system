@@ -14,10 +14,6 @@
 <link rel="stylesheet" href="{{ asset('css/components/pdf_popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/pagination.css') }}">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
     .dropdown {
     position: relative;
@@ -51,6 +47,27 @@
         background: #f0f0f0; /* same as anchor hover */
         color: #000;
     }
+
+    /* Loading spinner styles */
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
+    color: #666;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 </style>
 @endpush
 
@@ -100,86 +117,20 @@
             <th>Actions</th>
         </tr>
     </thead>
-    <tbody id="supplierTable">
-        @forelse ($suppliers as $index => $supplier)
-            <tr>
-                <td>{{ $suppliers->firstItem() + $index }}</td>
-                <td>{{ $supplier->name ?? "N/A" }}</td>
-                <td>{{ $supplier->company ?? "N/A"  }}</td>
-                <td>{{$supplier->address ?? "N/A" }}</td>
-                <td>{{$supplier->contact_info ?? "N/A"  }}</td>
-                <td>{{$supplier->purchases_count}}</td>
-                <td>Rs {{ number_format($supplier->total_purchase_amount, 2) }}</td>
-                <td><a href="{{route('supplier.show',$supplier->id)}}"><i style="font-size:18px; margin-left:13px; color:#5c6670;" class="fa fa-eye"></i></a></td>
-                <td>
-    <div class="dropdown">
-        <button class="dropdown-toggle">⋮</button>
-        <div class="dropdown-menu">
-            <a href="{{ route('supplier.edit', $supplier->id) }}">Edit</a>
-            <button type="button"
-        id="delete-button"
-        data-action="{{ route('supplier.delete', $supplier->id) }}"
-        onclick="openDeleteModal(this)">
-    Delete
-</button>
-    </div>
-</td>
-            </tr>
-        @empty
-            <tr>
-                <td colspan="7">No Record found.</td>
-            </tr>
-        @endforelse
-    </tbody>
+    <tbody id="supplierTableBody">
+    <tr>
+        <td colspan="9">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading suppliers...</p>
+            </div>
+        </td>
+    </tr>
+</tbody>
 </table>
 
-    <div class="custom-pagination">
-        @if ($suppliers->onFirstPage())
-            <span class="disabled">« First</span>
-        @else
-            <a class="ajax-link" href="{{ $suppliers->url(1) }}">« First</a>
-        @endif
-
-        {{-- Previous Page Link --}}
-        @if ($suppliers->onFirstPage())
-            <span class="disabled">←</span>
-        @else
-            <a href="{{ $suppliers->previousPageUrl() }}" rel="prev">←</a>
-        @endif
-
-        @php
-            $start = max($suppliers->currentPage() - 2, 1);
-            $end = min($suppliers->currentPage() + 2, $suppliers->lastPage());
-        @endphp
-
-        @if ($start > 1)
-            <span class="dots">...</span>
-        @endif
-
-        @for ($page = $start; $page <= $end; $page++)
-            @if ($page == $suppliers->currentPage())
-                <span class="active">{{ $page }}</span>
-            @else
-                <a href="{{ $suppliers->url($page) }}">{{ $page }}</a>
-            @endif
-        @endfor
-
-        @if ($end < $suppliers->lastPage())
-            <span class="dots">...</span>
-        @endif
-
-        {{-- Next Page Link --}}
-        @if ($suppliers->hasMorePages())
-            <a href="{{ $suppliers->nextPageUrl() }}" rel="next">→</a>
-        @else
-            <span class="disabled">→</span>
-        @endif
-
-        @if ($suppliers->hasMorePages())
-            <a href="{{ $suppliers->url($suppliers->lastPage()) }}">Last »</a>
-        @else
-            <span class="disabled">Last »</span>
-        @endif
+    <div class="custom-pagination" id="paginationContainer">
+        <!-- Pagination links will be dynamically inserted here -->
     </div>
     
 <!-- Delete Confirmation Modal (single instance reused for all rows) -->
@@ -231,17 +182,157 @@
 </div>
 <script src="{{asset('js/search.js')}}"></script>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    let activeMenu = null; // ✅ define it globally within this scope
+// Global variables
+let currentPage = 1;
 
-    // Function to position and show the menu
+// Load suppliers on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadSuppliers(1);
+    
+    // Check for flash messages in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const successMsg = urlParams.get('success');
+    const errorMsg = urlParams.get('error');
+    
+    if (successMsg) {
+        showPopupMessage(successMsg, 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (errorMsg) {
+        showPopupMessage(errorMsg, 'error');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+// Function to load suppliers via AJAX
+function loadSuppliers(page) {
+    currentPage = page;
+    
+    fetch(`{{ route('supplier.data') }}?page=${page}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            renderTable(data.data, data.pagination);
+            renderPagination(data.pagination);
+        } else {
+            showError('Failed to load suppliers');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('An error occurred while loading suppliers');
+    });
+}
+
+// Render table rows
+function renderTable(suppliers, pagination) {
+    const tbody = document.getElementById('supplierTableBody');
+    
+    if (suppliers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9">No Record found.</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    suppliers.forEach((supplier, index) => {
+        const rowNumber = pagination.first_item + index;
+        
+        html += `
+            <tr>
+                <td>${rowNumber}</td>
+                <td>${supplier.name ?? 'N/A'}</td>
+                <td>${supplier.company ?? 'N/A'}</td>
+                <td>${supplier.address ?? 'N/A'}</td>
+                <td>${supplier.contact_info ?? 'N/A'}</td>
+                <td>${supplier.purchases_count}</td>
+                <td>Rs ${formatNumber(supplier.total_purchase_amount)}</td>
+                <td>
+                    <a href="/supplier/show/${supplier.id}">
+                        <i style="font-size:18px; margin-left:13px; color:#5c6670;" class="fa fa-eye"></i>
+                    </a>
+                </td>
+                <td>
+                    <div class="dropdown">
+                        <button class="dropdown-toggle">⋮</button>
+                        <div class="dropdown-menu">
+                            <a href="/supplier/${supplier.id}/edit">Edit</a>
+                            <button type="button"
+                                id="delete-button"
+                                data-action="/supplier/${supplier.id}/delete"
+                                onclick="openDeleteModal(this)">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    attachDropdownListeners();
+}
+
+// Render pagination (simplified for simplePaginate)
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    
+    let html = '';
+    
+    // Previous button
+    if (pagination.on_first_page) {
+        html += '<span class="disabled">←</span>';
+    } else {
+        html += `<a href="javascript:void(0)" onclick="loadSuppliers(${pagination.current_page - 1})">←</a>`;
+    }
+    
+    // Current page number
+    html += `<span class="active">${pagination.current_page}</span>`;
+    
+    // Next button
+    if (pagination.has_more_pages) {
+        html += `<a href="javascript:void(0)" onclick="loadSuppliers(${pagination.current_page + 1})">→</a>`;
+    } else {
+        html += '<span class="disabled">→</span>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Delete modal functions
+function openDeleteModal(button) {
+    const deleteUrl = button.getAttribute('data-action');
+    document.getElementById('deleteForm').action = deleteUrl;
+    document.getElementById('deleteModal').style.display = 'flex';
+    document.getElementById('deleteModal').setAttribute('aria-hidden', 'false');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').style.display = 'none';
+    document.getElementById('deleteModal').setAttribute('aria-hidden', 'true');
+}
+
+function submitDelete(option) {
+    const form = document.getElementById('deleteForm');
+    document.getElementById('deleteOption').value = option;
+    form.submit();
+}
+
+// Attach dropdown listeners
+function attachDropdownListeners() {
+    let activeMenu = null;
+
     function showMenuUnderButton(menu, button) {
-        // Hide any previously open menu
         if (activeMenu && activeMenu !== menu) {
             activeMenu.style.display = "none";
         }
 
-        // Toggle display for current one
         if (menu.style.display === "block") {
             menu.style.display = "none";
             activeMenu = null;
@@ -254,7 +345,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    // Attach toggle logic to all dropdown buttons
     document.querySelectorAll(".dropdown-toggle").forEach(button => {
         button.addEventListener("click", function (e) {
             e.stopPropagation();
@@ -263,14 +353,62 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Close when clicking outside
     document.addEventListener("click", function () {
         if (activeMenu) {
             activeMenu.style.display = "none";
             activeMenu = null;
         }
     });
+}
+
+// Helper functions
+function formatNumber(num) {
+    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+}
+
+function showError(message) {
+    const tbody = document.getElementById('supplierTableBody');
+    tbody.innerHTML = `<tr><td colspan="9" style="color: red; text-align: center;">${message}</td></tr>`;
+}
+
+function showPopupMessage(message, type) {
+    let popup = document.getElementById('popup-message');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'popup-message';
+        popup.className = 'popup';
+        document.body.insertBefore(popup, document.body.firstChild);
+    }
+    popup.textContent = message;
+    popup.className = `popup ${type}`;
+    popup.style.display = 'block';
+    
+    setTimeout(() => {
+        popup.style.display = 'none';
+    }, 3000);
+}
+
+// PDF/Print popup functions
+document.getElementById('openPdfPopup')?.addEventListener('click', function() {
+    document.getElementById('pdfPopup').style.display = 'flex';
 });
+
+document.getElementById('closePdfPopup')?.addEventListener('click', function() {
+    document.getElementById('pdfPopup').style.display = 'none';
+});
+
+document.getElementById('openPrintPopup')?.addEventListener('click', function() {
+    document.getElementById('printPopup').style.display = 'flex';
+});
+
+document.getElementById('closePrintPopup')?.addEventListener('click', function() {
+    document.getElementById('printPopup').style.display = 'none';
+});
+
+// Export to Excel function
+function exportToExcel() {
+    alert('Excel export functionality');
+}
 </script>
 <script src="{{asset('js/pdf_popup.js')}}"></script>
 <script src="{{asset('js/print_popup.js')}}"></script>

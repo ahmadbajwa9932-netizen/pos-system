@@ -98,19 +98,21 @@
                     <span class="detail-value">Rs {{ number_format($sale->adjusted_tax, 2) }}</span>
                 </div>
 
-                <div class="detail-row" style="border-top: 2px solid #e74c3c; padding-top: 10px;">
+                <div class="detail-row" @if ($sale->total_returned_amount) style="border-top: 2px solid #e74c3c; padding-top: 10px;" @endif>
+                    <span class="detail-label">Original Grand Total:</span>
+                    <span class="detail-value" style="text-decoration: line-through; color: #888;" >
+                        Rs {{ number_format($sale->grand_total, 2) }}
+                    </span>
+                </div>
+
+                <div class="detail-row">
                     <span class="detail-label">Total Returned Amount:</span>
                     <span class="detail-value" style="color: #e74c3c;">
                         -Rs {{ number_format($sale->total_returned_amount, 2) }}
                     </span>
                 </div>
 
-                <div class="detail-row">
-                    <span class="detail-label">Original Grand Total:</span>
-                    <span class="detail-value" style="text-decoration: line-through; color: #888;">
-                        Rs {{ number_format($sale->grand_total, 2) }}
-                    </span>
-                </div>
+
                 <div class="detail-row" style="border-top: 1px solid #ccc; padding-top: 10px;">
                     <span class="detail-label"><strong>Current Grand Total:</strong></span>
                     <span class="detail-value"><strong>Rs {{ number_format($sale->adjusted_grand_total, 2) }}</strong></span>
@@ -135,7 +137,13 @@
 
                 <div class="detail-row">
                     <span class="detail-label">Tax:</span>
-                    <span class="detail-value">Rs {{ number_format($sale->tax ?? 0, 2) }}</span>
+                    <span class="detail-value">
+                    @if($sale->tax_type === 'percentage')
+     {{ number_format($sale->tax,0) }}% (Rs {{ number_format($sale->tax_amount, 2) }})
+@else
+  Rs {{ number_format($sale->tax_amount, 2) }}
+@endif
+                    </span>
                 </div>
 
                 <div class="detail-row">
@@ -171,6 +179,10 @@
                 <div class="detail-row">
                     <span class="detail-label">Name:</span>
                     <span class="detail-value">{{ $sale->customer->name ?? 'Walk-in Customer' }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Shop Name:</span>
+                    <span class="detail-value">{{ $sale->customer->shop_name ?? 'N/A' }}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Contact:</span>

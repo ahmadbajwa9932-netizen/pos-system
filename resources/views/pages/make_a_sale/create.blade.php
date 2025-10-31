@@ -106,7 +106,7 @@ body.swal2-shown #shopAutocompleteList,
         font-size: 12px;
         color: #28a745;
         font-weight: 500;
-        margin-left: 10px;
+        margin-left: 5px;
         display: none;
     }
 
@@ -397,7 +397,9 @@ body.swal2-shown #shopAutocompleteList,
                             <label>Subtotal:</label>
                             <input type="text" name="subtotal" id="subtotal" readonly>
                         </div>
-
+</div>
+<div class="totals-section" style="border:none;">
+                    <div class="totals-grid">
                         <div class="total-item">
                             <label>Discount Type:</label>
                             <select name="discount_type" id="discount_type">
@@ -408,21 +410,30 @@ body.swal2-shown #shopAutocompleteList,
 
                         <div class="total-item">
                             <label>Discount:</label>
-                            <input type="number" name="discount" id="discount" value="0" step="0.01">
-                            <!-- ✅ Sale discount amount display -->
+                            <input type="number" name="discount" id="discount" class="spinner" value="0" step="0.01">
                             <span id="saleDiscountAmount" class="sale-discount-amount"></span>
                         </div>
 
                         <div class="total-item">
-                            <label style="padding-left:30px">Tax:</label>
-                            <input type="number" name="tax" id="tax" value="0" step="0.01">
-                        </div>
+  <label>Tax Type:</label>
+  <select name="tax_type" id="tax_type">
+        <option value="amount">Amount</option>
+        <option value="percentage">Percentage</option>
+    </select>
+</div>
+
+<div class="total-item">
+    <label>Tax:</label>
+    <input type="number" name="tax" id="tax" class="spinner" value="0" step="0.01">
+    <span id="taxAmount" class="sale-discount-amount"></span>
+</div>
+</div>
                     </div>
 
                     <div class="totals-row">
                         <div class="total-item">
                             <label>Received Amount:</label>
-                            <input type="number" name="received_amount" id="received_amount" step="0.01" placeholder="0.00">
+                            <input type="number" class="spinner" name="received_amount" id="received_amount" step="0.01" placeholder="0.00">
                         </div>
 
                         <div class="total-item">
@@ -496,6 +507,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const changeInput = document.getElementById('change_amount');
     const voucherNoInput = document.getElementById('voucher_no');
     const saleDiscountAmountSpan = document.getElementById('saleDiscountAmount');
+    const taxTypeSel = document.getElementById('tax_type');
+const taxAmountSpan = document.getElementById('taxAmount');
     
     // Customer elements
     const customerInput = document.getElementById("customer_name");
@@ -856,7 +869,6 @@ if (shopInput) {
             dueDateWrapper.style.display = 'none';
             if (dueDateInput) dueDateInput.value = '';
             shopNameWrapper.style.display = 'none';
-            if (shopNameInput) shopNameInput.value = '';
         }
     }
 
@@ -952,6 +964,12 @@ function validatePrice(priceInput, purchasedPrice, productName) {
     const enteredPrice = parseFloat(priceInput.value) || 0;
     
     if (enteredPrice > 0 && enteredPrice < purchasedPrice) {
+        priceInput.style.color = "red"; // below cost → red
+    } else {
+        priceInput.style.color = ""; // reset to default
+    }
+    
+    if (enteredPrice > 0 && enteredPrice < purchasedPrice) {
         // Auto-correct to purchased price
         priceInput.value = purchasedPrice.toFixed(2);
         
@@ -1025,7 +1043,7 @@ function validatePrice(priceInput, purchasedPrice, productName) {
                         <option value="amount">Amt</option>
                         <option value="percentage">%</option>
                     </select>
-                    <input type="number" name="items[${itemIndex}][discount_value]" class="discount_value" value="0" step="0.01" min="0">
+                    <input type="number" name="items[${itemIndex}][discount_value]" class="discount_value  spinner" value="0" step="0.01" min="0">
                     <div class="discount-amount-display"></div>
                 </div>
             </td>
@@ -1040,6 +1058,23 @@ function validatePrice(priceInput, purchasedPrice, productName) {
        // ✅ Price validation listener
 const priceInput = row.querySelector('.price');
 const purchasedPrice = parseFloat(product.purchased_price) || parseFloat(product.price);
+
+//  🎯 Real-time color change while typing
+priceInput.addEventListener('input', function() {
+    const enteredPrice = parseFloat(this.value) || 0;
+    
+    // Change color to red if less than purchased price
+    if (enteredPrice > 0 && enteredPrice < purchasedPrice) {
+        this.style.color = '#dc3545';
+        this.style.fontWeight = 'bold';
+    } else {
+        this.style.color = '';
+        this.style.fontWeight = '';
+    }
+    
+    recalcRow(row);
+    calculateTotals();
+});
 
 priceInput.addEventListener('blur', function() {
     validatePrice(this, purchasedPrice, product.name);
@@ -1084,23 +1119,82 @@ priceInput.setAttribute('data-product-name', product.name);
                         position: 'top-start',
                         backdrop: false
                     });
-                }
+                }else {
+            // ✅ NEW: Auto-close if stock is now sufficient
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+        }
                 calculateTotals();
             })
             .catch(err => console.error('Stock check error:', err));
     }
 
-    // ========================================
-    // 10. REMOVE ROW
-    // ========================================
-    if (itemsTableBody) {
-        itemsTableBody.addEventListener('click', function(e) {
-            if (e.target.classList.contains('removeRow')) {
-                e.target.closest('tr').remove();
-                calculateTotals();
+ // ========================================
+// 10. REMOVE ROW
+// ========================================
+if (itemsTableBody) {
+    itemsTableBody.addEventListener('click', function(e) {
+        if (e.target.classList.contains('removeRow')) {
+            const row = e.target.closest('tr');
+            const purchaseId = row.querySelector('input[name*="[purchase_id]"]')?.value;
+            const productName = row.querySelector('strong')?.textContent.trim();
+            
+            // Remove the row
+            row.remove();
+            calculateTotals();
+            
+            // ✅ Check if remaining quantity is valid after row removal
+            if (purchaseId && typeof Swal !== 'undefined') {
+                const remainingRows = Array.from(itemsTableBody.querySelectorAll('tr'));
+                const sameProductRows = remainingRows.filter(r => 
+                    r.querySelector('input[name*="[purchase_id]"]')?.value === purchaseId
+                );
+                
+                const totalQty = sameProductRows.reduce((sum, r) => 
+                    sum + parseInt(r.querySelector('.qty')?.value || 0), 0
+                );
+                
+                // Check stock for remaining quantity
+                fetch(`/check-stock/${purchaseId}?quantity=${totalQty}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'insufficient') {
+                            // ✅ Still oversold, UPDATE the popup with new oversold amount
+                            const oversold = totalQty - data.available;
+                            
+                            Swal.fire({
+                                icon: 'warning',
+                                title: '<span style="font-size:14px;">Stock Warning</span>',
+                                html: `
+                                    <p style="font-size:13px; margin:0;">
+                                        Only <strong>${data.available}</strong> units of 
+                                        <strong style="color:#d33;">${productName}</strong> are available.<br>
+                                        Remaining (oversold): <strong style="color:#d33;">-${oversold}</strong>
+                                    </p>`,
+                                confirmButtonText: 'OK',
+                                width: '330px',
+                                padding: '0.8em',
+                                customClass: { 
+                                    confirmButton: 'swal-custom-btn', 
+                                    closeButton: 'swal-close-btn' 
+                                },
+                                showCloseButton: true,
+                                position: 'top-start',
+                                backdrop: false
+                            });
+                        } else {
+                            // ✅ Stock is now sufficient, close any open warning
+                            if (Swal.isVisible()) {
+                                Swal.close();
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Stock check error:', err));
             }
-        });
-    }
+        }
+    });
+}
 
     // ========================================
     // 11. ROW CHANGES
@@ -1114,6 +1208,37 @@ priceInput.setAttribute('data-product-name', product.name);
             calculateTotals();
         }
     }
+
+    // ========================================
+// 🎯 ITEM-LEVEL DISCOUNT VALIDATION
+// ========================================
+if (itemsTableBody) {
+    itemsTableBody.addEventListener('input', function(e) {
+        if (e.target.classList.contains('discount_value')) {
+            const row = e.target.closest('tr');
+            const discountInput = e.target;
+            const discountType = row.querySelector('.discount_type').value;
+            
+            const qty = parseFloat(row.querySelector('.qty')?.value) || 0;
+            const price = parseFloat(row.querySelector('.price')?.value) || 0;
+            const totalRaw = qty * price;
+            
+            let currentValue = parseFloat(discountInput.value);
+            
+            if (discountType === 'percentage') {
+                // Limit percentage to 100
+                if (currentValue > 100) {
+                    discountInput.value = 100;
+                }
+            } else {
+                // Limit amount to total
+                if (currentValue > totalRaw) {
+                    discountInput.value = totalRaw.toFixed(2);
+                }
+            }
+        }
+    });
+}
 
     if (itemsTableBody) {
         itemsTableBody.addEventListener('input', handleRowChange);
@@ -1168,8 +1293,26 @@ priceInput.setAttribute('data-product-name', product.name);
 
         const discountType = discountTypeSel?.value || 'amount';
         const discountVal = Math.max(parseFloat(discountInput?.value) || 0, 0);
-        const tax = Math.max(parseFloat(taxInput?.value) || 0, 0);
+        const taxType = taxTypeSel?.value || 'amount';
+const taxVal = Math.max(parseFloat(taxInput?.value) || 0, 0);
 
+let taxAmount = 0;
+if (taxType === 'percentage') {
+    taxAmount = (subtotal * taxVal) / 100;
+} else {
+    taxAmount = taxVal;
+}
+taxAmount = Math.min(Math.max(taxAmount, 0), subtotal);
+
+// Show calculated tax amount if percentage
+if (taxAmountSpan) {
+    if (taxType === 'percentage' && taxVal > 0) {
+        taxAmountSpan.textContent = `(+${taxAmount.toFixed(2)})`;
+        taxAmountSpan.style.display = 'inline';
+    } else {
+        taxAmountSpan.style.display = 'none';
+    }
+}
         let overallDiscountAmount = 0;
         if (discountType === 'percentage') {
             overallDiscountAmount = (subtotal * discountVal) / 100;
@@ -1187,7 +1330,7 @@ priceInput.setAttribute('data-product-name', product.name);
             }
         }
 
-        const grandTotal = subtotal - overallDiscountAmount + tax;
+        const grandTotal = subtotal - overallDiscountAmount + taxAmount;
         grandTotalInput.value = grandTotal.toFixed(2);
 
         // Calculate Final Amount with current balance
@@ -1234,7 +1377,82 @@ priceInput.setAttribute('data-product-name', product.name);
     if (discountInput) discountInput.addEventListener('input', calculateTotals);
     if (taxInput) taxInput.addEventListener('input', calculateTotals);
     if (receivedInput) receivedInput.addEventListener('input', calculateTotals);
+    if (taxTypeSel) taxTypeSel.addEventListener('change', calculateTotals);
+    // ========================================
+// 🎯 SALE-LEVEL DISCOUNT VALIDATION
+// ========================================
+if (discountInput) {
+    discountInput.addEventListener('input', function() {
+        const discountType = discountTypeSel?.value || 'amount';
+        const subtotal = parseFloat(subtotalInput?.value) || 0;
+        let currentValue = parseFloat(this.value);
+        
+        if (discountType === 'percentage') {
+            // Limit percentage to 100
+            if (currentValue > 100) {
+                this.value = 100;
+                calculateTotals();
+            }
+        } else {
+            // Limit amount to subtotal
+            if (currentValue > subtotal) {
+                this.value = subtotal.toFixed(2);
+                calculateTotals();
+            }
+        }
+    });
+}
 
+// Also validate when discount type changes
+if (discountTypeSel) {
+    discountTypeSel.addEventListener('change', function() {
+        const discountType = this.value;
+        const subtotal = parseFloat(subtotalInput?.value) || 0;
+        let currentValue = parseFloat(discountInput?.value) || 0;
+        
+        if (discountType === 'percentage' && currentValue > 100) {
+            discountInput.value = 100;
+        } else if (discountType === 'amount' && currentValue > subtotal) {
+            discountInput.value = subtotal.toFixed(2);
+        }
+        calculateTotals();
+    });
+}
+// Tax validation
+if (taxInput) {
+    taxInput.addEventListener('input', function() {
+        const taxType = taxTypeSel?.value || 'amount';
+        const subtotal = parseFloat(subtotalInput?.value) || 0;
+        let currentValue = parseFloat(this.value);
+        
+        if (taxType === 'percentage') {
+            if (currentValue > 100) {
+                this.value = 100;
+                calculateTotals();
+            }
+        } else {
+            if (currentValue > subtotal) {
+                this.value = subtotal.toFixed(2);
+                calculateTotals();
+            }
+        }
+    });
+}
+
+if (taxTypeSel) {
+    taxTypeSel.addEventListener('change', function() {
+        const taxType = this.value;
+        const subtotal = parseFloat(subtotalInput?.value) || 0;
+        let currentValue = parseFloat(taxInput?.value) || 0;
+        
+        if (taxType === 'percentage' && currentValue > 100) {
+            taxInput.value = 100;
+        } else if (taxType === 'amount' && currentValue > subtotal) {
+            taxInput.value = subtotal.toFixed(2);
+        }
+        calculateTotals();
+    });
+}
     // ========================================
     // 14. PAYMENT TYPE CHANGE
     // ========================================
@@ -1260,54 +1478,66 @@ priceInput.setAttribute('data-product-name', product.name);
     }
 
     // ========================================
-    // 15. STOCK CHECK ON QTY CHANGE
-    // ========================================
-    if (itemsTableBody) {
-        itemsTableBody.addEventListener('input', function (e) {
-            if (e.target.classList.contains('qty') && typeof Swal !== 'undefined') {
-                const qtyInput = e.target;
-                const row = qtyInput.closest('tr');
-                const purchaseId = row.querySelector('input[name*="[purchase_id]"]')?.value;
-                const productName = row.querySelector('strong')?.textContent.trim();
-                const qty = parseInt(qtyInput.value) || 0;
+// 15. STOCK CHECK ON QTY CHANGE
+// ========================================
+if (itemsTableBody) {
+    itemsTableBody.addEventListener('input', function (e) {
+        if (e.target.classList.contains('qty') && typeof Swal !== 'undefined') {
+            const qtyInput = e.target;
+            const row = qtyInput.closest('tr');
+            const purchaseId = row.querySelector('input[name*="[purchase_id]"]')?.value;
+            const productName = row.querySelector('strong')?.textContent.trim();
+            const qty = parseInt(qtyInput.value) || 0;
 
-                if (qty > 0 && purchaseId) {
-                    fetch(`/check-stock/${purchaseId}?quantity=${qty}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'insufficient') {
-                                const oversold = qty - data.available;
+            if (qty > 0 && purchaseId) {
+                fetch(`/check-stock/${purchaseId}?quantity=${qty}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'insufficient') {
+                            const oversold = qty - data.available;
 
-                                Swal.fire({
-                                    icon: 'warning',
-                                    title: '<span style="font-size:14px;">Stock Warning</span>',
-                                    html: `
-                                        <p style="font-size:13px; margin:0;">
-                                            Only <strong>${data.available}</strong> units of 
-                                            <strong style="color:#d33;">${productName}</strong> are available.<br>
-                                            Remaining (oversold): <strong style="color:#d33;">-${oversold}</strong>
-                                        </p>`,
-                                    confirmButtonText: 'OK',
-                                    width: '330px',
-                                    padding: '0.8em',
-                                    customClass: {
-                                        confirmButton: 'swal-custom-btn',
-                                        closeButton: 'swal-close-btn'
-                                    },
-                                    showCloseButton: true,
-                                    position: 'top-start',
-                                    backdrop: false
-                                });
+                            Swal.fire({
+                                icon: 'warning',
+                                title: '<span style="font-size:14px;">Stock Warning</span>',
+                                html: `
+                                    <p style="font-size:13px; margin:0;">
+                                        Only <strong>${data.available}</strong> units of 
+                                        <strong style="color:#d33;">${productName}</strong> are available.<br>
+                                        Remaining (oversold): <strong style="color:#d33;">-${oversold}</strong>
+                                    </p>`,
+                                confirmButtonText: 'OK',
+                                width: '330px',
+                                padding: '0.8em',
+                                customClass: {
+                                    confirmButton: 'swal-custom-btn',
+                                    closeButton: 'swal-close-btn'
+                                },
+                                showCloseButton: true,
+                                position: 'top-start',
+                                backdrop: false
+                            });
 
-                                recalcRow(row);
-                                calculateTotals();
+                            recalcRow(row);
+                            calculateTotals();
+                        } else {
+                            // ✅ NEW: Auto-close the warning if quantity is now valid
+                            if (Swal.isVisible()) {
+                                Swal.close();
                             }
-                        })
-                        .catch(error => console.error('Stock check error:', error));
+                            recalcRow(row);
+                            calculateTotals();
+                        }
+                    })
+                    .catch(error => console.error('Stock check error:', error));
+            } else {
+                // ✅ NEW: Also close if quantity is 0 or empty
+                if (Swal.isVisible()) {
+                    Swal.close();
                 }
             }
-        });
-    }
+        }
+    });
+}
 
     // ========================================
 // COMPLETE FORM VALIDATION FIX
@@ -1574,7 +1804,6 @@ function showHistoryModal(summary, history) {
             const saleDate = new Date(sale.sale_date).toLocaleDateString();
             const returnedInfo = sale.returned_qty > 0 ? ` <span style="color: #dc3545;">(-${sale.returned_qty})</span>` : '';
             const discountInfo = sale.discount_amount > 0 ? `<br><small style="color: #28a745;">Discount: ${sale.discount_type === 'percentage' ? sale.discount_value + '%' : 'Rs ' + sale.discount_value}</small>` : '';
-            
             return `
                 <tr style="font-size: 12px;">
                     <td>${saleDate}</td>
@@ -1582,8 +1811,8 @@ function showHistoryModal(summary, history) {
                     <td>${sale.customer_name}<small style="color: #6c757d;"> (${sale.customer_type})</small></td>
                     <td>${sale.quantity}${returnedInfo}</td>
                     <td>Rs ${parseFloat(sale.price).toFixed(2)}${discountInfo}</td>
-                    <td>Rs ${parseFloat(sale.total_after_discount).toFixed(2)}</td>
-                    <td><span class="badge badge-${sale.payment_type === 'cash' ? 'success' : sale.payment_type === 'credit' ? 'warning' : 'primary'}">${sale.payment_type}</span></td>
+<td>Rs ${parseFloat(sale.final_total || sale.total_after_discount).toFixed(2)}</td>         
+           <td><span class="badge badge-${sale.payment_type === 'cash' ? 'success' : sale.payment_type === 'credit' ? 'warning' : 'primary'}">${sale.payment_type}</span></td>
                 </tr>
             `;
         }).join('');
@@ -1606,14 +1835,9 @@ function showHistoryModal(summary, history) {
                     <div><strong>Available Stock:</strong> <span style="color: #28a745; font-weight: bold;">${summary.available_stock}</span></div>
                     <div><strong>Total Transactions:</strong> ${summary.total_transactions}</div>
                     <div><strong>Total Revenue:</strong> <span style="color: #007bff; font-weight: bold;">Rs ${parseFloat(summary.total_revenue).toFixed(2)}</span></div>
-<div><strong>Total Profit:</strong>
-<span style="color: #28a745; font-weight: bold;">
-Rs ${history.reduce((profit, sale) => {
-    const salePrice = parseFloat(sale.price) || 0;
-    const purchasePrice = parseFloat(summary.purchase_price) || 0;
-    const qty = parseFloat(sale.quantity) || 0;
-    return profit + ((salePrice - purchasePrice) * qty);
-}, 0).toFixed(2)}
+<div><strong>${summary.total_profit < 0 ? 'Total Loss:' : 'Total Profit:'}</strong>
+<span style="color: ${summary.total_profit < 0 ? '#dc3545' : '#28a745'}; font-weight: bold;">
+Rs ${Math.abs(summary.total_profit).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
 </span></div>
                 </div>
             </div>
@@ -1643,6 +1867,7 @@ Rs ${history.reduce((profit, sale) => {
         title: `Sales History - ${summary.product_name}`,
         html: modalContent,
         width: '900px',
+        height: '900px',
         showConfirmButton: true,
         confirmButtonText: 'Close',
         customClass: {

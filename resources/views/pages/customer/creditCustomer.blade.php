@@ -15,10 +15,7 @@
 <link rel="stylesheet" href="{{ asset('css/components/popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/pdf_popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/pagination.css') }}">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="{{ asset('css/components/loading-spinner.css') }}">
 <style>
     #customerSearchType {
     padding: 8px 12px;
@@ -96,95 +93,22 @@
                     <th>Action</th>
         </tr>
     </thead>
-    <tbody>
-    @forelse($customers as $index => $customer)
-            <tr>
-            <td>{{ $index + 1 }}</td>
-                        <td>{{ $customer->name ?? 'Walk-in Customer' }}</td>
-                        <td>{{ $customer->shop_name ?? 'N/A' }}</td>
-                        <td>{{ $customer->contact ?? 'N/A' }}</td>
-                        <td>{{ $customer->city ?? 'N/A' }}</td>
-                        <td>{{ $customer->credit_sales_count }}</td>
-                        <td>{{ $customer->current_balance }}</td>
-                        <td>
-    @php
-        $latestCreditSale = $customer->sales
-            ->where('payment_type', 'credit')
-            ->sortByDesc('created_at')
-            ->first();
-    @endphp
-
-    @if($latestCreditSale)
-        {{ $latestCreditSale->created_at->timezone('Asia/Karachi')->format('Y-m-d g:i:A') }}
-    @else
-        N/A
-    @endif
-</td>
-                <td><a href="{{ route('customers.credit.purchases', $customer->id) }}"><i style="font-size:18px; margin-left:13px; color:#5c6670" class="fa fa-eye"></i></a></td>
-                <td><button type="button"
-        id="delete-button"
-        class="delete-button"
-        data-action="{{ route('customers.credit.destroy', $customer->id) }}"
-        onclick="openDeleteModal(this)">
-    Delete
-</button></td>
-            </tr>
-        @empty
-            <tr>
-                <td colspan="10">No Record found.</td>
-            </tr>
-        @endforelse
-    </tbody>
+    <tbody id="creditCustomerTableBody">
+    <!-- Loading spinner -->
+    <tr>
+        <td colspan="10">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading credit customers...</p>
+            </div>
+        </td>
+    </tr>
+</tbody>
 </table>
 
-    <div class="custom-pagination">
-        @if ($customers->onFirstPage())
-            <span class="disabled">« First</span>
-        @else
-            <a class="ajax-link" href="{{ $customers->url(1) }}">« First</a>
-        @endif
-
-        {{-- Previous Page Link --}}
-        @if ($customers->onFirstPage())
-            <span class="disabled">←</span>
-        @else
-            <a href="{{ $customers->previousPageUrl() }}" rel="prev">←</a>
-        @endif
-
-        @php
-            $start = max($customers->currentPage() - 2, 1);
-            $end = min($customers->currentPage() + 2, $customers->lastPage());
-        @endphp
-
-        @if ($start > 1)
-            <span class="dots">...</span>
-        @endif
-
-        @for ($page = $start; $page <= $end; $page++)
-            @if ($page == $customers->currentPage())
-                <span class="active">{{ $page }}</span>
-            @else
-                <a href="{{ $customers->url($page) }}">{{ $page }}</a>
-            @endif
-        @endfor
-
-        @if ($end < $customers->lastPage())
-            <span class="dots">...</span>
-        @endif
-
-        {{-- Next Page Link --}}
-        @if ($customers->hasMorePages())
-            <a href="{{ $customers->nextPageUrl() }}" rel="next">→</a>
-        @else
-            <span class="disabled">→</span>
-        @endif
-
-        @if ($customers->hasMorePages())
-            <a href="{{ $customers->url($customers->lastPage()) }}">Last »</a>
-        @else
-            <span class="disabled">Last »</span>
-        @endif
-    </div>
+<div class="custom-pagination" id="paginationContainer">
+    <!-- Pagination will be loaded here via AJAX -->
+</div>
 </div>
 </div>
 <!-- Delete Confirmation Modal (single instance reused for all rows) -->
@@ -230,51 +154,197 @@
     </div>
 </div>
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-    const searchInput = document.getElementById("customerSearchInput");
-    const searchType = document.getElementById("customerSearchType");
-    const table = document.getElementById("customerSalesTable");
-    const rows = table.getElementsByTagName("tr");
-    // 🔹 Helper: fuzzy match (characters appear in sequence)
-    function fuzzyMatch(text, token) {
-        let tIndex = 0;
-        for (let i = 0; i < text.length && tIndex < token.length; i++) {
-            if (text[i] === token[tIndex]) {
-                tIndex++;
-            }
-        }
-        return tIndex === token.length;
-    }
+// Global variables
+let currentPage = 1;
+let allCreditCustomers = [];
 
-    searchInput.addEventListener("keyup", function () {
-        const filter = this.value.toLowerCase().trim();
-        const tokens = filter.split(/\s+/);
-        const type = searchType.value;
-
-        for (let i = 1; i < rows.length; i++) { // skip header row
-            let cells = rows[i].getElementsByTagName("td");
-            if (!cells.length) continue;
-
-            let customerName = cells[1].innerText.toLowerCase();
-            let shopName = cells[2].innerText.toLowerCase();
-            let contact = cells[3].innerText.toLowerCase();
-            let textToSearch = "";
-
-            // 🔸 Choose column to search
-            if (type === "customer") textToSearch = customerName;
-            else if (type === "shop_name") textToSearch = shopName;
-            else if (type === "contact") textToSearch = contact;
-
-            // ✅ fuzzy or exact match
-            const match = tokens.every(token =>
-                textToSearch.includes(token) || fuzzyMatch(textToSearch, token)
-            );
-
-            rows[i].style.display = match ? "" : "none";
-        }
-    });
+// Load credit customers on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadCreditCustomers(1);
 });
 
+// Function to load credit customers via AJAX
+function loadCreditCustomers(page) {
+    currentPage = page;
+    
+    fetch(`{{ route('customers.credit.data') }}?page=${page}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            allCreditCustomers = data.data;
+            renderTable(data.data, data.pagination);
+            renderPagination(data.pagination);
+            filterTable(); // Apply any active filters
+        } else {
+            showError('Failed to load credit customers');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('An error occurred while loading credit customers');
+    });
+}
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+
+    const date = new Date(dateString);
+
+    const day = String(date.getDate()).padStart(2, '0');
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = monthNames[date.getMonth()];
+
+    const year = date.getFullYear();
+
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+
+    return `${day}-${month}-${year} ${hours}:${minutes} ${ampm}`;
+}
+
+
+// Render table rows
+function renderTable(customers, pagination) {
+    const tbody = document.getElementById('creditCustomerTableBody');
+    
+    if (customers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10">No Record found.</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    customers.forEach((customer, index) => {
+        const rowNumber = pagination.first_item + index;
+        const latestCreditSale = customer.sales && customer.sales.length > 0 ? customer.sales[0] : null;
+        
+        html += `
+            <tr>
+                <td>${rowNumber}</td>
+                <td>${customer.name || 'Walk-in Customer'}</td>
+                <td>${customer.shop_name || 'N/A'}</td>
+                <td>${customer.contact || 'N/A'}</td>
+                <td>${customer.city || 'N/A'}</td>
+                <td>${customer.credit_sales_count || 0}</td>
+                <td>${customer.current_balance || 0}</td>
+                <td>${latestCreditSale ? formatDateTime(latestCreditSale.created_at) : 'N/A'}</td>
+                <td><a href="/customers/credit/${customer.id}/purchases"><i style="font-size:18px; margin-left:13px; color:#5c6670" class="fa fa-eye"></i></a></td>
+                <td>
+                    <button type="button"
+                        id="delete-button"
+                        class="delete-button"
+                        data-action="/customers/credit/${customer.id}/delete"
+                        onclick="openDeleteModal(this)">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Render pagination (same as customer page)
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    
+    if (pagination.last_page <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    if (pagination.on_first_page) {
+        html += '<span class="disabled">« First</span>';
+        html += '<span class="disabled">←</span>';
+    } else {
+        html += `<a href="javascript:void(0)" onclick="loadCreditCustomers(1)">« First</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadCreditCustomers(${pagination.current_page - 1})">←</a>`;
+    }
+    
+    const start = Math.max(pagination.current_page - 2, 1);
+    const end = Math.min(pagination.current_page + 2, pagination.last_page);
+    
+    if (start > 1) html += '<span class="dots">...</span>';
+    
+    for (let page = start; page <= end; page++) {
+        if (page === pagination.current_page) {
+            html += `<span class="active">${page}</span>`;
+        } else {
+            html += `<a href="javascript:void(0)" onclick="loadCreditCustomers(${page})">${page}</a>`;
+        }
+    }
+    
+    if (end < pagination.last_page) html += '<span class="dots">...</span>';
+    
+    if (pagination.has_more_pages) {
+        html += `<a href="javascript:void(0)" onclick="loadCreditCustomers(${pagination.current_page + 1})">→</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadCreditCustomers(${pagination.last_page})">Last »</a>`;
+    } else {
+        html += '<span class="disabled">→</span>';
+        html += '<span class="disabled">Last »</span>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Search functionality
+const searchInput = document.getElementById("customerSearchInput");
+const searchType = document.getElementById("customerSearchType");
+
+function fuzzyMatch(text, token) {
+    let tIndex = 0;
+    for (let i = 0; i < text.length && tIndex < token.length; i++) {
+        if (text[i] === token[tIndex]) tIndex++;
+    }
+    return tIndex === token.length;
+}
+
+function filterTable() {
+    const filter = searchInput.value.toLowerCase().trim();
+    const tokens = filter.split(/\s+/);
+    const type = searchType.value;
+
+    const tbody = document.getElementById('creditCustomerTableBody');
+    const rows = tbody.querySelectorAll('tr');
+
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (!cells.length) return;
+
+        const customerName = (cells[1]?.innerText || '').toLowerCase();
+        const shopName = (cells[2]?.innerText || '').toLowerCase();
+        const contact = (cells[3]?.innerText || '').toLowerCase();
+
+        let textToSearch = '';
+        if (type === 'customer') textToSearch = customerName;
+        else if (type === 'shop_name') textToSearch = shopName;
+        else if (type === 'contact') textToSearch = contact;
+
+        const match = tokens.every(token => textToSearch.includes(token) || fuzzyMatch(textToSearch, token));
+        row.style.display = match ? '' : 'none';
+    });
+}
+
+searchInput.addEventListener('input', filterTable);
+searchType.addEventListener('change', filterTable);
+
+function showError(message) {
+    const tbody = document.getElementById('creditCustomerTableBody');
+    tbody.innerHTML = `<tr><td colspan="10" style="color: red; text-align: center;">${message}</td></tr>`;
+}
 </script>
 <script src="{{asset('js/delete_modal.js')}}"></script>
 <script src="{{asset('js/pdf_popup.js')}}"></script>

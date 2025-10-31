@@ -14,10 +14,6 @@
 <link rel="stylesheet" href="{{ asset('css/components/search.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/popup.css') }}">
 <link rel="stylesheet" href="{{ asset('css/components/pagination.css') }}">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 .dropdown {
     position: relative;
@@ -135,6 +131,27 @@
         background: #f0f0f0; /* same as anchor hover */
         color: #000;
     }
+
+    /* Loading spinner styles */
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+    font-size: 16px;
+    color: #666;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 </style>
 @endpush
 
@@ -216,86 +233,22 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
-            @forelse ($purchases as $index => $purchase)
-                <tr>
-                    <td>{{ $purchases->firstItem() + $index }}</td>
-                    <td>{{ $purchase->product_name }}</td>
-                    <td>{{ $purchase->category->name }}</td>
-                    <!-- <td>Rs {{ number_format($purchase->purchased_price, 2) }}</td> -->
-                    <!-- <td>Rs {{ number_format($purchase->sold_price, 2) }}</td> -->
-                    <!-- <td>{{ number_format($purchase->quantity, 0) }}</td> -->
-                    <td>{{ $purchase->unit }}</td>
-                    <!-- <td>Rs {{ number_format($purchase->purchased_price * $purchase->quantity, 2) }}</td> -->
-                    <!-- <td>{{ $purchase->sold_quantity }}</td> -->
-                    <td>{{ $purchase->quantity - $purchase->sold_quantity }}</td>
-                    <td>{{ \Carbon\Carbon::parse($purchase->purchase_date)->format('d-M-Y') }}</td>
-                    <td>
-    <div class="dropdown">
-        <button class="dropdown-toggle">⋮</button>
-        <div class="dropdown-menu">
-            <a href="{{ route('purchase.update', $purchase->id) }}">Edit</a>
-            <button type="button"
-        id="delete-button"
-        data-action="{{ route('purchase.delete', $purchase->id) }}"
-        onclick="openDeleteModal(this)">
-    Delete
-</button>
-            <a href="{{route('purchase.detail',$purchase->id)}}">View Detail</a>
-            <button id="restock-btn" type="button" onclick="openRestockModal({{ $purchase->id }}, '{{ $purchase->product_name }}', '{{ \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') }}')">
-    Restock
-</button>
-        </div>
-    </div>
-</td>
-                </tr>
-            @empty
-                <tr><td colspan="13">No record found.</td></tr>
-            @endforelse
-            </tbody>
+            <tbody id="purchaseTableBody">
+    <!-- Loading spinner -->
+    <tr>
+        <td colspan="8">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Loading purchases...</p>
+            </div>
+        </td>
+    </tr>
+</tbody>
         </table>
 
-        <div class="custom-pagination">
-            {{-- First & Previous --}}
-            @if ($purchases->onFirstPage())
-                <span class="disabled">« First</span>
-                <span class="disabled">←</span>
-            @else
-                <a href="{{ $purchases->url(1) }}">« First</a>
-                <a href="{{ $purchases->previousPageUrl() }}">←</a>
-            @endif
-
-            {{-- Page Numbers --}}
-            @php
-                $start = max($purchases->currentPage() - 2, 1);
-                $end = min($purchases->currentPage() + 2, $purchases->lastPage());
-            @endphp
-
-            @if ($start > 1)
-                <span class="dots">...</span>
-            @endif
-
-            @for ($page = $start; $page <= $end; $page++)
-                @if ($page == $purchases->currentPage())
-                    <span class="active">{{ $page }}</span>
-                @else
-                    <a href="{{ $purchases->url($page) }}">{{ $page }}</a>
-                @endif
-            @endfor
-
-            @if ($end < $purchases->lastPage())
-                <span class="dots">...</span>
-            @endif
-
-            {{-- Next & Last --}}
-            @if ($purchases->hasMorePages())
-                <a href="{{ $purchases->nextPageUrl() }}">→</a>
-                <a href="{{ $purchases->url($purchases->lastPage()) }}">Last »</a>
-            @else
-                <span class="disabled">→</span>
-                <span class="disabled">Last »</span>
-            @endif
-        </div>
+        <div class="custom-pagination" id="paginationContainer">
+    <!-- Pagination will be loaded here via AJAX -->
+</div>
     </div>
 </div>
 
@@ -364,49 +317,328 @@
         <button class="close-btn" id="closePrintPopup" style="width:50%;">Cancel</button>
     </div>
 </div>
-
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+// Global variables
+let currentPage = 1;
+let allPurchases = [];
+
+// Load purchases on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadPurchases(1);
+    
+    // Check for flash messages in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const successMsg = urlParams.get('success');
+    const errorMsg = urlParams.get('error');
+    
+    if (successMsg) {
+        showPopupMessage(successMsg, 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (errorMsg) {
+        showPopupMessage(errorMsg, 'error');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+// Function to load purchases via AJAX
+function loadPurchases(page) {
+    currentPage = page;
+    
+    fetch(`{{ route('purchase.data') }}?page=${page}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            allPurchases = data.data;
+            renderTable(data.data, data.pagination);
+            renderPagination(data.pagination);
+        } else {
+            showError('Failed to load purchases');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('An error occurred while loading purchases');
+    });
+}
+
+// Render table rows
+function renderTable(purchases, pagination) {
+    const tbody = document.getElementById('purchaseTableBody');
+    
+    if (purchases.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6">No purchases found</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    purchases.forEach((purchase, index) => {
+        const rowNumber = pagination.first_item + index;
+        const remaining = purchase.quantity - purchase.sold_quantity;
+        
+        html += `
+            <tr>
+                <td>${rowNumber}</td>
+                <td>${purchase.product_name}</td>
+                <td>${purchase.category ? purchase.category.name : 'N/A'}</td>
+                <td>${purchase.unit}</td>
+                <td>${remaining}</td>
+                <td>${formatDate(purchase.purchase_date)}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="dropdown-toggle">⋮</button>
+                        <div class="dropdown-menu">
+                            <a href="javascript:void(0)" onclick="loadEditPage(${purchase.id})">Edit</a>
+                            <button type="button"
+                                id="delete-button"
+                                data-action="/purchase/delete/${purchase.id}"
+                                onclick="openDeleteModal(this)">
+                                Delete
+                            </button>
+                            <a href="javascript:void(0)" onclick="loadDetailPage(${purchase.id})">View Detail</a>
+                            <button id="restock-btn" type="button" onclick="openRestockModal(${purchase.id}, '${purchase.product_name}', '${purchase.purchase_date}')">
+                                Restock
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    attachDropdownListeners();
+}
+
+// Render pagination
+function renderPagination(pagination) {
+    const container = document.getElementById('paginationContainer');
+    
+    if (pagination.last_page <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    if (pagination.on_first_page) {
+        html += '<span class="disabled">« First</span>';
+        html += '<span class="disabled">←</span>';
+    } else {
+        html += `<a href="javascript:void(0)" onclick="loadPurchases(1)">« First</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadPurchases(${pagination.current_page - 1})">←</a>`;
+    }
+    
+    const start = Math.max(pagination.current_page - 2, 1);
+    const end = Math.min(pagination.current_page + 2, pagination.last_page);
+    
+    if (start > 1) {
+        html += '<span class="dots">...</span>';
+    }
+    
+    for (let page = start; page <= end; page++) {
+        if (page === pagination.current_page) {
+            html += `<span class="active">${page}</span>`;
+        } else {
+            html += `<a href="javascript:void(0)" onclick="loadPurchases(${page})">${page}</a>`;
+        }
+    }
+    
+    if (end < pagination.last_page) {
+        html += '<span class="dots">...</span>';
+    }
+    
+    if (pagination.has_more_pages) {
+        html += `<a href="javascript:void(0)" onclick="loadPurchases(${pagination.current_page + 1})">→</a>`;
+        html += `<a href="javascript:void(0)" onclick="loadPurchases(${pagination.last_page})">Last »</a>`;
+    } else {
+        html += '<span class="disabled">→</span>';
+        html += '<span class="disabled">Last »</span>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Function to load edit page via AJAX
+function loadEditPage(purchaseId) {
+    // Show loading state
+    const tbody = document.getElementById('purchaseTableBody');
+    tbody.innerHTML = '<tr><td colspan="8"><div class="loading-spinner"><div class="spinner"></div><p>Loading edit form...</p></div></td></tr>';
+    
+    fetch(`/purchase/${purchaseId}/edit`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Redirect to edit page (or you can render inline if you prefer)
+            window.location.href = `/purchase/${purchaseId}/edit`;
+        } else {
+            showPopupMessage('Failed to load edit form', 'error');
+            loadPurchases(currentPage);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showPopupMessage('An error occurred', 'error');
+        loadPurchases(currentPage);
+    });
+}
+
+// Function to load detail page via AJAX
+function loadDetailPage(purchaseId) {
+    // Show loading state
+    const tbody = document.getElementById('purchaseTableBody');
+    tbody.innerHTML = '<tr><td colspan="8"><div class="loading-spinner"><div class="spinner"></div><p>Loading details...</p></div></td></tr>';
+    
+    fetch(`/purchase/detail/${purchaseId}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Redirect to detail page (or you can render inline if you prefer)
+            window.location.href = `/purchase/detail/${purchaseId}`;
+        } else {
+            showPopupMessage('Failed to load details', 'error');
+            loadPurchases(currentPage);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showPopupMessage('An error occurred', 'error');
+        loadPurchases(currentPage);
+    });
+}
+
+// Delete modal functions
+function openDeleteModal(button) {
+    const deleteUrl = button.getAttribute('data-action');
+    document.getElementById('deleteForm').action = deleteUrl;
+    document.getElementById('deleteModal').style.display = 'flex';
+    document.getElementById('deleteModal').setAttribute('aria-hidden', 'false');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').style.display = 'none';
+    document.getElementById('deleteModal').setAttribute('aria-hidden', 'true');
+}
+
+function submitDelete(option) {
+    const form = document.getElementById('deleteForm');
+    const deleteUrl = form.action;
+    
+    closeDeleteModal();
+    
+    fetch(deleteUrl, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showPopupMessage(data.message, 'success');
+            loadPurchases(currentPage);
+        } else {
+            showPopupMessage(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showPopupMessage('An error occurred while deleting', 'error');
+    });
+}
+
+// Restock modal functions
+function openRestockModal(id, name, date) {
+    document.getElementById('purchaseId').value = id;
+    document.getElementById('restockProductName').innerText = 'Restock ' + name;
+    document.getElementById('purchaseDate').value = date.split(' ')[0];
+    document.getElementById('restockModal').style.display = 'flex';
+}
+
+function closeRestockModal() {
+    document.getElementById('restockModal').style.display = 'none';
+}
+
+// Helper functions
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${date.getDate()}-${months[date.getMonth()]}-${date.getFullYear()}`;
+}
+
+function showError(message) {
+    const tbody = document.getElementById('purchaseTableBody');
+    tbody.innerHTML = `<tr><td colspan="6" style="color: red; text-align: center;">${message}</td></tr>`;
+}
+
+function showPopupMessage(message, type) {
+    let popup = document.getElementById('popup-message');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'popup-message';
+        popup.className = 'popup';
+        document.body.insertBefore(popup, document.body.firstChild);
+    }
+    popup.textContent = message;
+    popup.className = `popup ${type}`;
+    popup.style.display = 'block';
+    
+    setTimeout(() => {
+        popup.style.display = 'none';
+    }, 3000);
+}
+
+// Attach dropdown listeners
+function attachDropdownListeners() {
     const tableRows = document.querySelectorAll("#purchaseTable tbody tr");
-    let activeMenu = null; 
+    let activeMenu = null;
 
     function showMenuAtCursor(menu, e) {
-        // Close other menus
         if (activeMenu && activeMenu !== menu) {
             activeMenu.style.display = "none";
         }
-
-        // Show at cursor position
         menu.style.display = "block";
         menu.style.position = "fixed";
         menu.style.left = e.clientX + "px";
         menu.style.top = e.clientY + "px";
         menu.style.right = "auto";
-
         activeMenu = menu;
     }
 
     function showMenuUnderButton(menu, button) {
-        // Close other menus
         if (activeMenu && activeMenu !== menu) {
             activeMenu.style.display = "none";
         }
-
-        // Show menu under button
         menu.style.display = "block";
         menu.style.position = "absolute";
         menu.style.right = "0";
         menu.style.top = "100%";
         menu.style.left = "auto";
-
         activeMenu = menu;
     }
 
-    // Row click - show at cursor
     tableRows.forEach(row => {
         row.addEventListener("click", function (e) {
             if (e.target.closest("a") || e.target.closest("button") || e.target.closest("input") || e.target.closest(".dropdown")) return;
-
             let dropdown = this.querySelector(".dropdown");
             let menu = dropdown ? dropdown.querySelector(".dropdown-menu") : null;
             
@@ -422,7 +654,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // ⋮ button click - show under icon
     document.querySelectorAll(".dropdown-toggle").forEach(button => {
         button.addEventListener("click", function (e) {
             e.stopPropagation();
@@ -436,108 +667,35 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Close on outside click
     document.addEventListener("click", function () {
         if (activeMenu) {
             activeMenu.style.display = "none";
             activeMenu = null;
         }
     });
-});
-
-function openRestockModal(id, name,date) {
-    document.getElementById('purchaseId').value = id;
-    document.getElementById('restockProductName').innerText = 'Restock ' + name;
-    document.getElementById('purchaseDate').value = date;   
-    document.getElementById('restockModal').style.display = 'flex';
 }
 
-function closeRestockModal() {
-    document.getElementById('restockModal').style.display = 'none';
-}
-
-document.addEventListener("DOMContentLoaded", function () {
-
-    const svgIcon=document.querySelector('.icon1');
-    const searchContainer=document.getElementById('search-container');
-    const searchInput = document.getElementById("purchaseSearch");
-    const searchType = document.getElementById("searchType");
-    const quantityFrom = document.getElementById("quantityFrom");
-    const quantityTo = document.getElementById("quantityTo");
-    const quantityRangeInputs = document.getElementById("quantityRangeInputs");
-    const table = document.getElementById("purchaseTable");
-    const rows = table.getElementsByTagName("tr");
-
-    // 🔹 Toggle between normal search & quantity range search
-    searchType.addEventListener("change", function () {
-        if (this.value === "quantity") {
-            searchContainer.style.boxShadow="0 0px 0px";
-            searchInput.style.display = "none";
-            svgIcon.style.display="none";
-            quantityRangeInputs.style.display = "flex";
-        } else {
-            searchContainer.style.boxShadow="0 2px 4px rgba(0, 0, 0, 0.1)";
-            svgIcon.style.display="block";
-            searchInput.style.display = "block";
-            quantityRangeInputs.style.display = "none";
-            // Reset filtering when switching types
-            quantityFrom.value = "";
-            quantityTo.value = "";
-            filterTable();
-        }
-    });
-
-    // 🔹 Helper: fuzzy match
-    function fuzzyMatch(text, token) {
-        let tIndex = 0;
-        for (let i = 0; i < text.length && tIndex < token.length; i++) {
-            if (text[i] === token[tIndex]) tIndex++;
-        }
-        return tIndex === token.length;
-    }
-
-    // 🔹 Main filtering function
-    function filterTable() {
-        const filter = searchInput.value.toLowerCase().trim();
-        const type = searchType.value;
-
-        for (let i = 1; i < rows.length; i++) {
-            let cells = rows[i].getElementsByTagName("td");
-            if (!cells.length) continue;
-
-            let productName = cells[1].innerText.toLowerCase();
-            let category = cells[2].innerText.toLowerCase();
-            let unit = cells[3].innerText.toLowerCase();
-            let quantity = parseInt(cells[4].innerText.trim()) || 0;
-            let textToSearch = "";
-
-            // 🔸 Normal searches
-            if (type === "product") textToSearch = productName;
-            else if (type === "category") textToSearch = category;
-            else if (type === "unit") textToSearch = unit;
-            else if (type === "quantity") {
-                const fromVal = parseInt(quantityFrom.value) || 0;
-                const toVal = parseInt(quantityTo.value) || Infinity;
-
-                if (quantity >= fromVal && quantity <= toVal) {
-                    rows[i].style.display = "";
-                } else {
-                    rows[i].style.display = "none";
-                }
-                continue;
-            }
-
-            // ✅ fuzzy/exact match
-            const match = filter === "" || textToSearch.includes(filter) || fuzzyMatch(textToSearch, filter);
-            rows[i].style.display = match ? "" : "none";
-        }
-    }
-
-    // 🔹 Event listeners
-    searchInput.addEventListener("keyup", filterTable);
-    quantityFrom.addEventListener("input", filterTable);
-    quantityTo.addEventListener("input", filterTable);
+// PDF/Print popup functions
+document.getElementById('openPdfPopup')?.addEventListener('click', function() {
+    document.getElementById('pdfPopup').style.display = 'flex';
 });
+
+document.getElementById('closePdfPopup')?.addEventListener('click', function() {
+    document.getElementById('pdfPopup').style.display = 'none';
+});
+
+document.getElementById('openPrintPopup')?.addEventListener('click', function() {
+    document.getElementById('printPopup').style.display = 'flex';
+});
+
+document.getElementById('closePrintPopup')?.addEventListener('click', function() {
+    document.getElementById('printPopup').style.display = 'none';
+});
+
+// Export to Excel function
+function exportToExcel() {
+    alert('Excel export functionality');
+}
 </script>
 <script src="{{asset('js/pdf_popup.js')}}"></script>
 <script src="{{asset('js/print_popup.js')}}"></script>

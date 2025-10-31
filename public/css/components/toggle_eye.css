@@ -1,0 +1,30 @@
+.toggle-visibility {
+    cursor: pointer;
+    margin-left: 6px;
+    vertical-align: middle;
+    /* accessibility */
+    outline: none;
+}
+
+/* By default: show the eye, hide the slash */
+.toggle-visibility .eye-open {
+    display: inline;
+}
+.toggle-visibility .eye-closed {
+    display: none;
+    pointer-events: none; /* slash shouldn't capture clicks */
+}
+
+/* When toggled (hidden state): show the slash on top of the eye */
+.toggle-visibility.hidden .eye-closed {
+    display: inline;
+}
+
+/* (IMPORTANT) Remove any rule that hides the eye in .hidden state.
+   e.g. delete or overwrite: `.hidden .eye-open { display: none; }` */
+
+/* Optional: small visual tuning so the slash sits cleanly on top */
+.toggle-visibility .eye-closed {
+    stroke-width: 2.2;  /* slightly thicker look */
+    stroke-linecap: round;
+}

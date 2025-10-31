@@ -69,7 +69,13 @@
 
                 <div class="detail-row">
                     <span class="detail-label">Tax:</span>
-                    <span class="detail-value">Rs {{ number_format($creditSale->tax ?? 0, 2) }}</span>
+                    <span class="detail-value">
+                        @if($creditSale->tax_type === 'percentage')
+     {{ number_format($creditSale->tax,0) }}% (Rs {{ number_format($creditSale->tax_amount, 2) }})
+@else
+  Rs {{ number_format($creditSale->tax_amount, 2) }}
+@endif
+</span>
                 </div>
 
                 <div class="detail-row" style="border-top: 1px solid #ccc; padding-top: 10px;">
@@ -166,7 +172,7 @@
                     <h4 style="color: #6c757d; margin-bottom: 10px; font-size: 14px;">Payment History</h4>
                     @foreach($creditSale->payments as $payment)
                     <div class="detail-row" style="font-size: 13px; padding: 5px 0;">
-                        <span class="detail-label">{{ \Carbon\Carbon::parse($payment->payment_date)->format('M d, Y') }}:</span>
+                        <span class="detail-label">{{ \Carbon\Carbon::parse($payment->payment_date)->format('d M Y h:i A') }}:</span>
                         <span class="detail-value" style="color: #27ae60;">Rs {{ number_format($payment->amount, 2) }} ({{ ucfirst($payment->method) }})</span>
                     </div>
                     @endforeach

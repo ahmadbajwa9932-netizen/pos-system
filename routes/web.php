@@ -48,6 +48,8 @@ Route::middleware('auth')->group(function () {
     // Purchase Routes
     Route::prefix('purchase')->name('purchase.')->group(function () {
         Route::get('/', [PurchaseController::class, 'index'])->name('index');
+        Route::get('/data', [PurchaseController::class, 'getData'])->name('data');
+        Route::get('/search', [PurchaseController::class, 'search'])->name('search');
         Route::get('/add', [PurchaseController::class, 'create'])->name('add');
         Route::post('/store', [PurchaseController::class, 'store'])->name('store');
         Route::get('/{id}/edit', [PurchaseController::class, 'edit'])->name('update');
@@ -56,6 +58,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/detail/{id}', [PurchaseController::class, 'show'])->name('detail');
         Route::post('/restock', [PurchaseController::class, 'restock'])->name('restock');
         Route::get('/low-inventory', [PurchaseController::class, 'lowInventory'])->name('lowInventory');
+        Route::get('/low-inventory/data', [PurchaseController::class, 'getLowInventoryData'])->name('lowInventory.data');
         Route::get('/purchase/pdf/current', [ExportController::class, 'exportPurchaseCurrentPagePDF'])->name('pdf.current');
         Route::get('/purchase/pdf/all', [ExportController::class, 'exportPurchaseAllPDF'])->name('pdf.all');
        // Print routes (same function, just send 'print' mode)
@@ -73,7 +76,9 @@ Route::get('/purchase/print/all', function (Request $request) {
     // Supplier Routes
     Route::prefix('supplier')->name('supplier.')->group(function () {
         Route::get('/', [SupplierController::class, 'index'])->name('index');
+        Route::get('/data', [SupplierController::class, 'getData'])->name('data');
         Route::get('/show/{id}', [SupplierController::class, 'show'])->name('show');
+        Route::get('/show/{id}/purchases', [SupplierController::class, 'getSupplierPurchases'])->name('show.purchases');
         Route::get('/{id}/edit', [SupplierController::class, 'edit'])->name('edit');
         Route::post('/{id}', [SupplierController::class, 'update'])->name('update.post');
         Route::get('/{id}/delete', [SupplierController::class, 'destroy'])->name('delete');
@@ -226,9 +231,10 @@ Route::get('/customer-balance/{customerId}', [SalesController::class, 'getCustom
     // Customer Routes
     Route::prefix('customers')->name('customers.')->group(function () {
         Route::get('/', [CustomerController::class, 'index'])->name('index');
+        Route::get('/data', [CustomerController::class, 'getData'])->name('data');
         Route::get('/credit', [CustomerController::class, 'creditCustomerIndex'])->name('credit.index');
+        Route::get('/credit/data', [CustomerController::class, 'getCreditData'])->name('credit.data');
         Route::get('/credit/{id}/delete', [CustomerController::class, 'destroyCreditCustomer'])->name('credit.destroy');
-        Route::delete('/{id}', [CustomerController::class, 'destroy'])->name('destroy');
         Route::get('/{id}/purchases', [CustomerController::class, 'showPurchases'])->name('purchases');
         Route::get('/{id}/delete', [CustomerController::class, 'destroy'])->name('destroy');
         Route::get('/credit/{id}/purchases', [CustomerController::class, 'showCreditPurchases'])->name('credit.purchases');
@@ -270,25 +276,31 @@ Route::get('credit/print/all', function (Request $request) {
     });
 
     // Expense Routes
-    Route::prefix('expenses')->name('expenses.')->group(function () {
-        Route::get('/', [ExpenseController::class, 'index'])->name('index');
-        Route::get('/create', [ExpenseController::class, 'create'])->name('create');
-        Route::post('/store', [ExpenseController::class, 'store'])->name('store');
-        Route::post('/store-multiple', [ExpenseController::class, 'storeMultiple'])->name('storeMultiple');
-        Route::get('/delete/{id}', [ExpenseController::class, 'destroy'])->name('destroy');
-        Route::get('/pdf/current', [ExportController::class, 'exportExpenseCurrentPagePDF'])->name('pdf.current');
-        Route::get('/pdf/all', [ExportController::class, 'exportExpenseAllPDF'])->name('pdf.all');
-        // Print routes (same function, just send 'print' mode)
-Route::get('/print/current', function (Request $request) {
-    return app(ExportController::class)
-        ->exportExpenseCurrentPagePDF($request, 'print');
-})->name('print.current');
+Route::prefix('expenses')->name('expenses.')->group(function () {
+    // Page route - loads instantly
+    Route::get('/', [ExpenseController::class, 'index'])->name('index');
+    
+    // AJAX data route - fetches data separately
+    Route::get('/data', [ExpenseController::class, 'getData'])->name('data');
+    
+    Route::get('/create', [ExpenseController::class, 'create'])->name('create');
+    Route::post('/store', [ExpenseController::class, 'store'])->name('store');
+    Route::post('/store-multiple', [ExpenseController::class, 'storeMultiple'])->name('storeMultiple');
+    Route::get('/delete/{id}', [ExpenseController::class, 'destroy'])->name('destroy');
+    Route::get('/pdf/current', [ExportController::class, 'exportExpenseCurrentPagePDF'])->name('pdf.current');
+    Route::get('/pdf/all', [ExportController::class, 'exportExpenseAllPDF'])->name('pdf.all');
+    
+    // Print routes (same function, just send 'print' mode)
+    Route::get('/print/current', function (Request $request) {
+        return app(ExportController::class)
+            ->exportExpenseCurrentPagePDF($request, 'print');
+    })->name('print.current');
 
-Route::get('/print/all', function (Request $request) {
-    return app(ExportController::class)
-        ->exportExpenseAllPDF($request, 'print');
-})->name('print.all');
-    });
+    Route::get('/print/all', function (Request $request) {
+        return app(ExportController::class)
+            ->exportExpenseAllPDF($request, 'print');
+    })->name('print.all');
+});
 
     // Reports Routes
     Route::prefix('reports')->name('reports.')->group(function () {

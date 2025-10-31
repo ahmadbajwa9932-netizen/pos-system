@@ -46,7 +46,7 @@
                 </div>
                 <div class="input-group">
                     <span class="input-group-text">S. Price</span>
-                    <input type="number" step="0.01" id="sold_price" name="sold_price" placeholder="Sold price..." required>
+                    <input type="number" step="0.01" id="sold_price" name="sold_price" placeholder="Sold price...">
                 </div>
             </div>
             <small id="sold_price_error" class="error-message" style="color:red; display:none; margin-left:40%; margin-bottom:2px">

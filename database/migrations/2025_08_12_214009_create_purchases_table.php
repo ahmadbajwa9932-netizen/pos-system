@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('product_name');
             $table->decimal('purchased_price', 10, 2);     //purchased price
-            $table->decimal('sold_price', 10, 2);
+            $table->decimal('sold_price', 10, 2)->nullable()->default(0);
             $table->decimal('previous_sold_price', 10, 2)->nullable();
             $table->decimal('quantity', 10, 2);
             $table->string('unit')->default('pcs'); 

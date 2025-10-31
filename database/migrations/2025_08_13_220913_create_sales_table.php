@@ -20,7 +20,9 @@ return new class extends Migration
         $table->enum('discount_type', ['amount', 'percentage'])->default('amount');
         $table->decimal('discount', 10, 2)->default(0);
         $table->decimal('discount_amount', 10, 2)->default(0);
+        $table->enum('tax_type', ['amount', 'percentage'])->default('amount');
         $table->decimal('tax', 10, 2)->default(0);
+        $table->decimal('tax_amount', 10, 2)->default(0);
         $table->decimal('grand_total', 10, 2);
         $table->decimal('received_amount', 10, 2)->default(0);
         $table->decimal('change_amount', 10, 2)->default(0);

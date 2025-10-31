@@ -148,9 +148,41 @@ class RevenueController extends Controller
     $profitByCategory = $this->getProfitByCategory($startDate, $endDate);
 
     // Tax Collected (support both possible column names: tax OR tax_amount)
-    $totalTaxCollected = $sales->sum(function ($s) {
-        return $s->tax ?? $s->tax_amount ?? 0;
-    });
+    // ✅ Adjusted Tax Collected (accurate after returns)
+$totalTaxCollected = 0;
+
+foreach ($sales as $sale) {
+    // Base sale tax
+    $saleTaxAmount = $sale->tax_amount ?? $sale->tax ?? 0;
+    $saleSubtotal = $sale->subtotal ?? 0;
+
+
+    // Determine actual paid ratio for credit sales
+    $paidRatio = 1;
+    if ($sale->payment_type === 'credit' && $sale->grand_total > 0) {
+        $paidRatio = max(0, min(1, ($sale->grand_total - $sale->remaining_balance) / $sale->grand_total));
+    }
+
+    // Get total returns for this sale
+    $returnItems = SaleReturn::where('sale_id', $sale->id)->get();
+    $returnedTax = 0;
+
+    foreach ($returnItems as $return) {
+        $returnSubtotal = $return->subtotal ?? ($return->total_return_amount / (1 + ($saleTaxAmount / $saleSubtotal)));
+
+        // Calculate proportional tax on returned amount
+        if ($saleSubtotal > 0 && $saleTaxAmount > 0) {
+            $proportionalTax = (($returnSubtotal * 1.1) / $sale->grand_total) * $saleTaxAmount;
+            $returnedTax += $proportionalTax;
+        }
+    }
+
+    // Effective tax = sale tax - refunded portion
+    $effectiveTax = max(0, $saleTaxAmount - $returnedTax);
+
+    // Apply paid ratio for credit sales
+    $totalTaxCollected += ($effectiveTax * $paidRatio);
+}
 
     // Low inventory alerts
     $lowInventoryAlerts = $this->getLowInventoryAlerts();

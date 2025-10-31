@@ -345,8 +345,10 @@ button.removeRow:hover {
     align-items: center;
     gap: 4px;
     flex: 1;
-    min-width: 120px;
+    min-width: 80px;
 }
+
+
 
 .total-item label {
     font-size: 12px;

@@ -49,6 +49,12 @@
 .sidebar-initially-collapsed .navbar {
     transition: none !important;
 }
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+  margin: 0;
+}
     </style>
 </head>
 <body>

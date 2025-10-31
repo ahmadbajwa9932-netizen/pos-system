@@ -78,7 +78,14 @@
             <p><strong>Items Discount:</strong> Rs <span id="items-discount">0.00</span></p>
             <p><strong>After Items Discount:</strong> Rs <span id="after-items-discount">0.00</span></p>
             <p><strong>Sale-Level Discount:</strong> Rs <span id="sale-discount">0.00</span></p>
-            <p><strong>Tax Adjustment:</strong> Rs <span id="tax-adjustment">0.00</span></p>
+            <p><strong>Tax Adjustment:</strong> 
+    @if($sale->tax_type === 'percentage')
+        {{ number_format(($sale->subtotal > 0 ? ($sale->tax_amount / $sale->subtotal) * 100 : 0), 1) }}%
+        (Rs <span id="tax-adjustment">0.00</span>)
+    @else
+        Rs <span id="tax-adjustment">0.00</span>
+    @endif
+</p>
             <hr>
             <div class="refund-total">
                 <h3>Total Refund Amount: Rs <span id="total-refund">0.00</span></h3>
@@ -150,7 +157,9 @@ function calculateRefund() {
     // Sale totals for proportional calculations
     const saleSubtotal = {{ $sale->subtotal ?? 0 }};
     const saleGrandTotal = {{ $sale->grand_total ?? 0 }};
-    const saleTax = {{ $sale->tax ?? 0 }};
+    const saleTaxType = "{{ $sale->tax_type ?? 'amount' }}";
+const saleTax = {{ $sale->tax ?? 0 }};
+const saleTaxAmount = {{ $sale->tax_amount ?? 0 }};
     
     // Calculate payment ratio (same as SaleReturnController)
     const actualPaymentRatio = (saleSubtotal > 0 && saleGrandTotal > 0) 
@@ -198,8 +207,8 @@ function calculateRefund() {
     const saleLevelDiscountAdjustment = totalAfterItemsDiscount * (actualPaymentRatio - 1);
     
     // ✅ FIXED: Calculate tax adjustment separately based on actual tax
-    const taxAdjustment = (saleTax > 0 && saleSubtotal > 0) 
-        ? (totalAfterItemsDiscount * (saleTax / saleSubtotal))
+    const taxAdjustment = (saleTaxAmount > 0 && saleSubtotal > 0) 
+        ? (totalAfterItemsDiscount * (saleTaxAmount / saleSubtotal))
         : 0;
 
     // Update summary
